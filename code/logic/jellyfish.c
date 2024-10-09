@@ -49,7 +49,7 @@ fossil_jellyfish_network_t* fossil_jellyfish_create_network(int32_t num_layers, 
     network->num_layers = num_layers;
     network->layers = (fossil_jellyfish_layer_t**)malloc(num_layers * sizeof(fossil_jellyfish_layer_t*));
 
-    for (size_t i = 0; i < num_layers; i++) {
+    for (int32_t i = 0; i < num_layers; i++) {
         fossil_jellyfish_layer_t* layer = (fossil_jellyfish_layer_t*)malloc(sizeof(fossil_jellyfish_layer_t));
         layer->num_neurons = neurons_per_layer[i];
         layer->activation = activations[i];
@@ -88,13 +88,13 @@ void fossil_jellyfish_forward(fossil_jellyfish_network_t* network, double* input
     // Load input into the first layer
     memcpy(network->layers[0]->outputs, input, network->layers[0]->num_neurons * sizeof(double));
 
-    for (size_t i = 1; i < network->num_layers; i++) {
+    for (int32_t i = 1; i < network->num_layers; i++) {
         fossil_jellyfish_layer_t* prev_layer = network->layers[i - 1];
         fossil_jellyfish_layer_t* layer = network->layers[i];
 
-        for (size_t j = 0; j < layer->num_neurons; j++) {
+        for (int32_t j = 0; j < layer->num_neurons; j++) {
             double weighted_sum = 0;
-            for (size_t k = 0; k < prev_layer->num_neurons; k++) {
+            for (int32_t k = 0; k < prev_layer->num_neurons; k++) {
                 weighted_sum += prev_layer->outputs[k] * layer->weights[j * prev_layer->num_neurons + k];
             }
             weighted_sum += layer->biases[j];
@@ -108,27 +108,27 @@ void fossil_jellyfish_backpropagate(fossil_jellyfish_network_t* network, double*
     fossil_jellyfish_layer_t* output_layer = network->layers[network->num_layers - 1];
 
     // Calculate deltas for the output layer
-    for (size_t i = 0; i < output_layer->num_neurons; i++) {
+    for (int32_t i = 0; i < output_layer->num_neurons; i++) {
         double error = expected_output[i] - output_layer->outputs[i];
         output_layer->deltas[i] = error * fossil_jellyfish_activate_derivative(output_layer->outputs[i], output_layer->activation);
     }
 
     // Propagate the error backward
-    for (size_t i = network->num_layers - 2; i >= 0; i--) {
+    for (int32_t i = network->num_layers - 2; i >= 0; i--) {
         fossil_jellyfish_layer_t* layer = network->layers[i];
         fossil_jellyfish_layer_t* next_layer = network->layers[i + 1];
 
-        for (size_t j = 0; j < layer->num_neurons; j++) {
+        for (int32_t j = 0; j < layer->num_neurons; j++) {
             double error = 0;
-            for (size_t k = 0; k < next_layer->num_neurons; k++) {
+            for (int32_t k = 0; k < next_layer->num_neurons; k++) {
                 error += next_layer->weights[k * layer->num_neurons + j] * next_layer->deltas[k];
             }
             layer->deltas[j] = error * fossil_jellyfish_activate_derivative(layer->outputs[j], layer->activation);
         }
 
         // Update weights and biases
-        for (size_t j = 0; j < next_layer->num_neurons; j++) {
-            for (size_t k = 0; k < layer->num_neurons; k++) {
+        for (int32_t j = 0; j < next_layer->num_neurons; j++) {
+            for (int32_t k = 0; k < layer->num_neurons; k++) {
                 next_layer->weights[j * layer->num_neurons + k] += learning_rate * next_layer->deltas[j] * layer->outputs[k];
             }
             next_layer->biases[j] += learning_rate * next_layer->deltas[j];
@@ -138,8 +138,8 @@ void fossil_jellyfish_backpropagate(fossil_jellyfish_network_t* network, double*
 
 // Train the network with gradient descent
 void fossil_jellyfish_train(fossil_jellyfish_network_t* network, double* inputs, double* expected_output, int32_t num_samples, int32_t num_epochs, double learning_rate) {
-    for (size_t epoch = 0; epoch < num_epochs; epoch++) {
-        for (size_t i = 0; i < num_samples; i++) {
+    for (int32_t epoch = 0; epoch < num_epochs; epoch++) {
+        for (int32_t i = 0; i < num_samples; i++) {
             fossil_jellyfish_forward(network, &inputs[i * network->layers[0]->num_neurons]);
             fossil_jellyfish_backpropagate(network, &expected_output[i * network->layers[network->num_layers - 1]->num_neurons], learning_rate);
         }
