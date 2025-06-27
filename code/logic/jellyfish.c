@@ -84,7 +84,7 @@ void fossil_jellyfish_cleanup(fossil_jellyfish_chain *chain) {
 
 void fossil_jellyfish_dump(const fossil_jellyfish_chain *chain) {
     for (size_t i = 0; i < chain->count; ++i) {
-        printf("Block %zu:\n", i);
+        printf("Block %llu:\n", (unsigned long long)i);
         printf("  Input: %s\n", chain->memory[i].input);
         printf("  Output: %s\n", chain->memory[i].output);
         printf("  Time: %llu\n", (unsigned long long)chain->memory[i].timestamp);
