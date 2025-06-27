@@ -18,9 +18,28 @@
 
 // Simple placeholder hash function (not cryptographic, just consistent)
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
-    size_t len = strlen(input) + strlen(output);
+    // Enhanced: Use a simple FNV-1a-like mixing over input and output
+    const uint32_t FNV_PRIME = 0x01000193;
+    uint32_t hash = 0x811c9dc5;
+    size_t in_len = strlen(input);
+    size_t out_len = strlen(output);
+
+    // Mix input
+    for (size_t i = 0; i < in_len; ++i) {
+        hash ^= (uint8_t)input[i];
+        hash *= FNV_PRIME;
+    }
+    // Mix output
+    for (size_t i = 0; i < out_len; ++i) {
+        hash ^= (uint8_t)output[i];
+        hash *= FNV_PRIME;
+    }
+
+    // Spread hash into hash_out buffer
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
-        hash_out[i] = (uint8_t)((input[i % strlen(input)] ^ output[i % strlen(output)] ^ (int)i) + i * 31);
+        hash ^= (hash >> 13);
+        hash *= FNV_PRIME;
+        hash_out[i] = (uint8_t)((hash >> (8 * (i % 4))) & 0xFF);
     }
 }
 
