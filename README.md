@@ -1,25 +1,24 @@
 # ***Jellyfish AI Library by Fossil Logic***
 
-Jellyfish is a cutting-edge, platform-independent library offering a robust suite of data structures, algorithms, and utilities designed to power AI-driven applications. Written in C and C++, Jellyfish is optimized for high performance and reliability across diverse operating systems. The library leverages the Meson build system for a seamless development experience.
+Jellyfish is a lightweight, portable AI library written in pure C with no external dependencies. Designed for embedded and trust-critical systems, it uses blockchain-inspired techniques to provide transparent, verifiable learning and memory. Each input/output interaction is stored as a cryptographically hashed block, forming a tamper-resistant chain of reasoning and decisions. The system can learn from past inputs, respond based on memory, and automatically prune outdated or irrelevant data. This makes fossil_jellyfish ideal for AI applications that demand traceability, minimal resource usage, and self-cleaning behavior.
 
 ## Key Features
 
-1. **Cross-Platform Compatibility**: Ensures consistent performance across major operating systems, including Windows, macOS, and Linux.
-2. **AI-Optimized Algorithms**: Provides specialized algorithms tailored for AI workloads, such as data transformation, filtering, and searching.
-3. **Modular and Extensible**: Offers modular components that can be easily customized to meet specific AI project requirements.
-4. **High Performance**: Implemented in C and C++ to maximize computational efficiency, suitable for both desktop and embedded AI applications.
-5. **Comprehensive Documentation**: Includes detailed documentation and examples to help developers integrate Jellyfish quickly and effectively.
+- **Cross-Platform**: Runs consistently on Windows, macOS, and Linux.
+- **No External Dependencies**: Written in pure C for maximum portability and minimal footprint.
+- **Blockchain-Inspired Memory**: Stores each interaction as a cryptographically hashed block, forming a tamper-resistant chain for transparent and verifiable learning.
+- **Self-Pruning**: Automatically removes outdated or irrelevant data to maintain efficiency.
+- **Traceable Reasoning**: Every decision and memory is auditable, supporting trust-critical applications.
+- **Configurable and Modular**: Easily tailored for embedded, desktop, or custom AI projects.
 
 ## Core Capabilities
 
-Jellyfish introduces a versatile set of tools and utilities to accelerate AI development:
-
-- **Data Transformation**: Functions for transforming and accumulating data in arrays, ideal for preprocessing AI datasets.
-- **Filtering and Searching**: Advanced capabilities for filtering elements and searching with custom predicates.
-- **Array Operations**: Utilities for reversing, swapping, and shuffling array elements, enabling efficient data manipulation.
-- **Iterator Support**: Provides iterator functionality for seamless traversal of data structures.
-- **Memory Management**: Custom allocation, reallocation, and free functions to optimize resource usage.
-- **String Utilities**: Includes functions like `jf_strdup` for efficient string manipulation.
+- **Data Transformation**: Functions for transforming and accumulating array data, ideal for AI preprocessing.
+- **Filtering & Searching**: Advanced tools for filtering elements and searching with custom predicates.
+- **Array Utilities**: Reverse, swap, and shuffle array elements for efficient data manipulation.
+- **Iterator Support**: Traverse data structures with iterator utilities.
+- **Custom Memory Management**: Allocate, reallocate, and free memory with optimized routines.
+- **String Utilities**: Efficient string handling, including functions like `jf_strdup`.
 
 ## Prerequisites
 
