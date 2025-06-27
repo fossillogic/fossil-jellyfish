@@ -11,15 +11,6 @@ Jellyfish is a lightweight, portable AI library written in pure C with no extern
 - **Traceable Reasoning**: Every decision and memory is auditable, supporting trust-critical applications.
 - **Configurable and Modular**: Easily tailored for embedded, desktop, or custom AI projects.
 
-## Core Capabilities
-
-- **Data Transformation**: Functions for transforming and accumulating array data, ideal for AI preprocessing.
-- **Filtering & Searching**: Advanced tools for filtering elements and searching with custom predicates.
-- **Array Utilities**: Reverse, swap, and shuffle array elements for efficient data manipulation.
-- **Iterator Support**: Traverse data structures with iterator utilities.
-- **Custom Memory Management**: Allocate, reallocate, and free memory with optimized routines.
-- **String Utilities**: Efficient string handling, including functions like `jf_strdup`.
-
 ## Prerequisites
 
 To get started with Jellyfish, ensure you have the following installed:
