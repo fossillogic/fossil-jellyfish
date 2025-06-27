@@ -100,6 +100,58 @@ FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_hash) {
     ASSUME_ITS_TRUE(diff);
 }
 
+FOSSIL_TEST_CASE(cpp_test_jellyfishai_reason_fuzzy_exact_and_fuzzy) {
+    JellyfishAI ai;
+    ai.learn("apple", "fruit");
+    ai.learn("appl", "not fruit");
+
+    // Exact match
+    std::string out1 = ai.reason_fuzzy("apple");
+    ASSUME_ITS_EQUAL_CSTR(out1.c_str(), "fruit");
+
+    // Fuzzy match (missing 'e')
+    std::string out2 = ai.reason_fuzzy("appl");
+    // Accept either "not fruit" or "fruit" depending on fuzzy logic
+    ASSUME_ITS_TRUE(out2 == "not fruit" || out2 == "fruit");
+
+    // Fuzzy match (typo)
+    std::string out3 = ai.reason_fuzzy("aple");
+    ASSUME_ITS_TRUE(out3 == "fruit" || out3 == "not fruit");
+
+    // No match
+    std::string out4 = ai.reason_fuzzy("banana");
+    ASSUME_ITS_EQUAL_CSTR(out4.c_str(), "Unknown");
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfishai_save_and_load) {
+    JellyfishAI ai;
+    ai.learn("cat", "meow");
+    ai.learn("dog", "bark");
+
+    const std::string filepath = "jellyfish_chain_test_save.dat";
+    int save_result = ai.save(filepath);
+    ASSUME_ITS_EQUAL_I32(save_result, 0);
+
+    JellyfishAI ai2;
+    int load_result = ai2.load(filepath);
+    ASSUME_ITS_EQUAL_I32(load_result, 0);
+
+    // Check that loaded data matches
+    std::string out1 = ai2.reason("cat");
+    std::string out2 = ai2.reason("dog");
+    ASSUME_ITS_EQUAL_CSTR(out1.c_str(), "meow");
+    ASSUME_ITS_EQUAL_CSTR(out2.c_str(), "bark");
+
+    // Cleanup test file
+    std::remove(filepath.c_str());
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfishai_load_nonexistent_file) {
+    JellyfishAI ai;
+    int result = ai.load("nonexistent_file_hopefully_12345.dat");
+    ASSUME_ITS_TRUE(result != 0);
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -110,6 +162,9 @@ FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_cleanup);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_dump);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_hash);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_save_and_load);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_load_nonexistent_file);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_reason_fuzzy_exact_and_fuzzy);
 
     FOSSIL_TEST_REGISTER(cpp_jellyfish_fixture);
 } // end of tests

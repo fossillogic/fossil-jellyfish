@@ -102,6 +102,72 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_hash) {
     ASSUME_ITS_TRUE(diff);
 }
 
+FOSSIL_TEST_CASE(c_test_jellyfish_chain_save_and_load) {
+    fossil_jellyfish_chain chain1, chain2;
+    fossil_jellyfish_init(&chain1);
+    fossil_jellyfish_init(&chain2);
+
+    fossil_jellyfish_learn(&chain1, "alpha", "beta");
+    fossil_jellyfish_learn(&chain1, "gamma", "delta");
+
+    const char *filepath = "test_jellyfish_chain_save.dat";
+    int save_result = fossil_jellyfish_save(&chain1, filepath);
+    ASSUME_ITS_TRUE(save_result == 1);
+
+    int load_result = fossil_jellyfish_load(&chain2, filepath);
+    ASSUME_ITS_TRUE(load_result == 1);
+
+    ASSUME_ITS_EQUAL_SIZE(chain2.count, 2);
+    ASSUME_ITS_EQUAL_CSTR(chain2.memory[0].input, "alpha");
+    ASSUME_ITS_EQUAL_CSTR(chain2.memory[0].output, "beta");
+    ASSUME_ITS_EQUAL_CSTR(chain2.memory[1].input, "gamma");
+    ASSUME_ITS_EQUAL_CSTR(chain2.memory[1].output, "delta");
+
+    // Clean up test file
+    remove(filepath);
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_chain_save_fail) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+    // Try to save to an invalid path
+    int save_result = fossil_jellyfish_save(&chain, "/invalid/path/should_fail.dat");
+    ASSUME_ITS_TRUE(save_result == 0);
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_chain_load_fail) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+    // Try to load from a non-existent file
+    int load_result = fossil_jellyfish_load(&chain, "nonexistent_file.dat");
+    ASSUME_ITS_TRUE(load_result == 0);
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_reason_fuzzy) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+
+    fossil_jellyfish_learn(&chain, "cat", "meow");
+    fossil_jellyfish_learn(&chain, "dog", "bark");
+    fossil_jellyfish_learn(&chain, "bird", "tweet");
+
+    // Exact match
+    const char *out1 = fossil_jellyfish_reason_fuzzy(&chain, "cat");
+    ASSUME_ITS_EQUAL_CSTR(out1, "meow");
+
+    // Fuzzy match (one char off)
+    const char *out2 = fossil_jellyfish_reason_fuzzy(&chain, "cot");
+    ASSUME_ITS_EQUAL_CSTR(out2, "meow");
+
+    // Fuzzy match (closest)
+    const char *out3 = fossil_jellyfish_reason_fuzzy(&chain, "bog");
+    ASSUME_ITS_EQUAL_CSTR(out3, "bark");
+
+    // No close match
+    const char *out4 = fossil_jellyfish_reason_fuzzy(&chain, "elephant");
+    ASSUME_ITS_EQUAL_CSTR(out4, "Unknown");
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -112,6 +178,10 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_cleanup);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_dump);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_hash);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_save_and_load);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_save_fail);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_load_fail);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_fuzzy);
 
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
 } // end of tests
