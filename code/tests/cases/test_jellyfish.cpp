@@ -44,7 +44,7 @@ using fossil::ai::JellyfishAI;
 FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_init) {
     JellyfishAI ai;
     // After init, the chain should be empty and valid
-    ASSUME_ITS_EQUAL_SIZE(ai.getChain().count, 0);
+    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 0);
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_learn_and_reason) {
@@ -67,11 +67,11 @@ FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_cleanup) {
 
     ai.learn("a", "1");
     ai.learn("b", "2");
-    ASSUME_ITS_EQUAL_SIZE(ai.getChain().count, 2);
+    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
 
     ai.cleanup();
     // After cleanup, the chain should be empty
-    ASSUME_ITS_EQUAL_SIZE(ai.getChain().count, 0);
+    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 0);
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_dump) {
@@ -80,7 +80,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_dump) {
     ai.learn("x", "y");
     // This just checks that dump does not crash; output is not captured
     ai.dump();
-    ASSUME_ITS_TRUE(ai.getChain().count == 1);
+    ASSUME_ITS_TRUE(ai.get_chain().count == 1);
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_hash) {

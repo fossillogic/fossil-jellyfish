@@ -197,7 +197,7 @@ namespace ai {
          *
          * @return Reference to the jellyfish chain.
          */
-        const fossil_jellyfish_chain& getChain() const {
+        const fossil_jellyfish_chain& get_chain() const {
             return chain;
         }
 
