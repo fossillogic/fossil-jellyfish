@@ -95,3 +95,51 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain *chain) {
         printf("\n");
     }
 }
+
+int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filepath) {
+    FILE *fp = fopen(filepath, "wb");
+    if (!fp) return 0;
+
+    fwrite(&chain->count, sizeof(size_t), 1, fp);
+    fwrite(chain->memory, sizeof(fossil_jellyfish_block), chain->count, fp);
+    fclose(fp);
+    return 1;
+}
+
+int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
+    FILE *fp = fopen(filepath, "rb");
+    if (!fp) return 0;
+
+    fread(&chain->count, sizeof(size_t), 1, fp);
+    if (chain->count > FOSSIL_JELLYFISH_MAX_MEM) chain->count = FOSSIL_JELLYFISH_MAX_MEM;
+
+    fread(chain->memory, sizeof(fossil_jellyfish_block), chain->count, fp);
+    fclose(fp);
+    return 1;
+}
+
+// Simple Levenshtein-like distance (cost is # of mismatched chars)
+static int fossil_jellyfish_similarity(const char *a, const char *b) {
+    int score = 0;
+    for (int i = 0; a[i] && b[i]; ++i) {
+        if (a[i] != b[i]) score++;
+    }
+    return score;
+}
+
+const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const char *input) {
+    int best_score = 1000;
+    const char *best_output = "Unknown";
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        if (!chain->memory[i].valid) continue;
+
+        int score = fossil_jellyfish_similarity(input, chain->memory[i].input);
+        if (score < best_score) {
+            best_score = score;
+            best_output = chain->memory[i].output;
+        }
+    }
+
+    return best_output;
+}

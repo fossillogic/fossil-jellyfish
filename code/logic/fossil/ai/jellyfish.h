@@ -110,6 +110,38 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain *chain);
  */
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out);
 
+/**
+ * Save the jellyfish chain to a file.
+ * This serializes the chain to a file for persistence.
+ * 
+ * @param chain Pointer to the jellyfish chain to save.
+ * @param filepath The path to the file where the chain will be saved.
+ * @return 0 on success, non-zero on failure.
+ */
+int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filepath);
+
+/**
+ * Load a jellyfish chain from a file.
+ * This deserializes the chain from a file.
+ * 
+ * @param chain Pointer to the jellyfish chain to load.
+ * @param filepath The path to the file from which the chain will be loaded.
+ * @return 0 on success, non-zero on failure.
+ */
+int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath);
+
+/**
+ * Fuzzy reasoning for jellyfish AI.
+ * This function attempts to find a close match for the input string
+ * and returns the corresponding output if found.
+ * 
+ * @param chain Pointer to the jellyfish chain.
+ * @param input The input string to reason about.
+ * @return The output string if a close match is found, or "Unknown" if not found.
+ */
+const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const char *input);
+
+
 #ifdef __cplusplus
 }
 #include <stdexcept>
@@ -207,6 +239,41 @@ namespace ai {
          */
         void reset() {
             fossil_jellyfish_init(&chain);
+        }
+
+        /**
+         * Fuzzy reasoning for jellyfish AI.
+         * This function attempts to find a close match for the input string
+         * and returns the corresponding output if found.
+         *
+         * @param input The input string to reason about.
+         * @return The output string if a close match is found, or "Unknown" if not found.
+         */
+        std::string reason_fuzzy(const std::string &input) {
+            const char *result = fossil_jellyfish_reason_fuzzy(&chain, input.c_str());
+            return std::string(result);
+        }
+
+        /**
+         * Save the jellyfish chain to a file.
+         * This serializes the chain to a file for persistence.
+         *
+         * @param filepath The path to the file where the chain will be saved.
+         * @return 0 on success, non-zero on failure.
+         */
+        int save(const std::string &filepath) const {
+            return fossil_jellyfish_save(&chain, filepath.c_str());
+        }
+
+        /**
+         * Load a jellyfish chain from a file.
+         * This deserializes the chain from a file.
+         *
+         * @param filepath The path to the file from which the chain will be loaded.
+         * @return 0 on success, non-zero on failure.
+         */
+        int load(const std::string &filepath) {
+            return fossil_jellyfish_load(&chain, filepath.c_str());
         }
 
     private:
