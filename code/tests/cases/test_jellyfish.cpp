@@ -152,6 +152,47 @@ FOSSIL_TEST_CASE(cpp_test_jellyfishai_load_nonexistent_file) {
     ASSUME_ITS_TRUE(result != 0);
 }
 
+FOSSIL_TEST_CASE(cpp_test_jellyfishai_reason_chain_basic) {
+    JellyfishAI ai;
+    ai.learn("sun", "star");
+    ai.learn("star", "celestial");
+
+    // Depth 0: should only show direct reasoning
+    std::string chain0 = ai.reason_chain("sun", 0);
+    ASSUME_ITS_TRUE(chain0.find("star") != std::string::npos);
+
+    // Depth 1: should show one level of reasoning
+    std::string chain1 = ai.reason_chain("sun", 1);
+    ASSUME_ITS_TRUE(chain1.find("star") != std::string::npos);
+    ASSUME_ITS_TRUE(chain1.find("celestial") != std::string::npos);
+
+    // Unknown input
+    std::string chain_unknown = ai.reason_chain("moon", 1);
+    ASSUME_ITS_EQUAL_CSTR(chain_unknown.c_str(), "Unknown");
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfishai_decay_confidence) {
+    JellyfishAI ai;
+    ai.learn("alpha", "beta");
+    ai.learn("gamma", "delta");
+
+    // Optionally, get confidence before decay if API allows
+    // For now, just call decay and check chain is still valid
+    ai.decay_confidence(0.5f);
+
+    // After decay, chain should still have same count
+    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
+
+    // Decay with 0.0 (no decay)
+    ai.decay_confidence(0.0f);
+    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
+
+    // Decay with 1.0 (full decay)
+    ai.decay_confidence(1.0f);
+    // Chain should still exist, but confidence values would be 0 if accessible
+    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -165,6 +206,8 @@ FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_save_and_load);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_load_nonexistent_file);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_reason_fuzzy_exact_and_fuzzy);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_reason_chain_basic);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_decay_confidence);
 
     FOSSIL_TEST_REGISTER(cpp_jellyfish_fixture);
 } // end of tests

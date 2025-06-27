@@ -168,6 +168,63 @@ FOSSIL_TEST_CASE(c_test_jellyfish_reason_fuzzy) {
     ASSUME_ITS_EQUAL_CSTR(out4, "Unknown");
 }
 
+FOSSIL_TEST_CASE(c_test_jellyfish_reason_chain) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+
+    fossil_jellyfish_learn(&chain, "a", "b");
+    fossil_jellyfish_learn(&chain, "b", "c");
+    fossil_jellyfish_learn(&chain, "c", "d");
+
+    // Depth 0 returns input
+    const char *out0 = fossil_jellyfish_reason_chain(&chain, "a", 0);
+    ASSUME_ITS_EQUAL_CSTR(out0, "a");
+
+    // Depth 1 returns first reasoning
+    const char *out1 = fossil_jellyfish_reason_chain(&chain, "a", 1);
+    ASSUME_ITS_EQUAL_CSTR(out1, "b");
+
+    // Depth 2 returns second reasoning
+    const char *out2 = fossil_jellyfish_reason_chain(&chain, "a", 2);
+    ASSUME_ITS_EQUAL_CSTR(out2, "c");
+
+    // Depth 3 returns third reasoning
+    const char *out3 = fossil_jellyfish_reason_chain(&chain, "a", 3);
+    ASSUME_ITS_EQUAL_CSTR(out3, "d");
+
+    // Depth greater than chain returns last found
+    const char *out4 = fossil_jellyfish_reason_chain(&chain, "a", 10);
+    ASSUME_ITS_EQUAL_CSTR(out4, "d");
+
+    // Unknown input returns "Unknown"
+    const char *out5 = fossil_jellyfish_reason_chain(&chain, "z", 2);
+    ASSUME_ITS_EQUAL_CSTR(out5, "Unknown");
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+
+    fossil_jellyfish_learn(&chain, "x", "y");
+    fossil_jellyfish_learn(&chain, "foo", "bar");
+
+    // Set confidence to a known value
+    chain.memory[0].confidence = 0.5f;
+    chain.memory[1].confidence = 0.1f;
+
+    fossil_jellyfish_decay_confidence(&chain, 0.2f);
+
+    // First block should have confidence 0.3
+    ASSUME_ITS_TRUE(chain.memory[0].confidence > 0.29f && chain.memory[0].confidence < 0.31f);
+    // Second block should be marked invalid (confidence < 0.05)
+    ASSUME_ITS_TRUE(chain.memory[1].valid == 0);
+
+    // After cleanup, only valid blocks remain
+    fossil_jellyfish_cleanup(&chain);
+    ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "x");
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -182,6 +239,8 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_save_fail);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_load_fail);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_fuzzy);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_chain);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_decay_confidence);
 
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
 } // end of tests
