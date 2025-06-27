@@ -50,7 +50,7 @@ void fossil_jellyfish_init(fossil_jellyfish_chain *chain) {
 
 void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, const char *output) {
     if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM) {
-        fossil_jellyfish_cleanup(chain); // Reclaim space
+        fossil_jellyfish_cleanup(chain);
     }
 
     fossil_jellyfish_block *block = &chain->memory[chain->count++];
@@ -58,6 +58,8 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, co
     strncpy(block->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
     block->timestamp = (uint64_t)time(NULL);
     block->valid = 1;
+    block->confidence = 1.0f;
+    block->usage_count = 0;
 
     fossil_jellyfish_hash(input, output, block->hash);
 }
@@ -65,6 +67,9 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, co
 const char* fossil_jellyfish_reason(fossil_jellyfish_chain *chain, const char *input) {
     for (size_t i = 0; i < chain->count; ++i) {
         if (chain->memory[i].valid && strncmp(chain->memory[i].input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
+            chain->memory[i].usage_count++;
+            if (chain->memory[i].confidence < 1.0f)
+                chain->memory[i].confidence += 0.05f;
             return chain->memory[i].output;
         }
     }
@@ -75,7 +80,7 @@ const char* fossil_jellyfish_reason(fossil_jellyfish_chain *chain, const char *i
 void fossil_jellyfish_cleanup(fossil_jellyfish_chain *chain) {
     size_t new_count = 0;
     for (size_t i = 0; i < chain->count; ++i) {
-        if (chain->memory[i].valid && (time(NULL) - chain->memory[i].timestamp < 3600)) {
+        if (chain->memory[i].valid && chain->memory[i].confidence >= 0.05f) {
             chain->memory[new_count++] = chain->memory[i];
         }
     }
@@ -142,4 +147,24 @@ const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const c
     }
 
     return best_output;
+}
+
+void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate) {
+    for (size_t i = 0; i < chain->count; ++i) {
+        if (!chain->memory[i].valid) continue;
+
+        chain->memory[i].confidence -= decay_rate;
+        if (chain->memory[i].confidence < 0.05f) {
+            chain->memory[i].valid = 0; // mark for cleanup
+        }
+    }
+}
+
+const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const char *input, int depth) {
+    if (depth <= 0) return input;
+
+    const char *first = fossil_jellyfish_reason_fuzzy(chain, input);
+    if (strcmp(first, "Unknown") == 0) return first;
+
+    return fossil_jellyfish_reason_chain(chain, first, depth - 1);
 }

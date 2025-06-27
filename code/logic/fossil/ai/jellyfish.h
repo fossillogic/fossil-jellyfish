@@ -41,7 +41,10 @@ typedef struct {
     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];
     uint64_t timestamp;
     int valid;
+    float confidence;   // New: how trusted this block is (0.0 - 1.0)
+    uint32_t usage_count; // New: how often it's used
 } fossil_jellyfish_block;
+
 
 /**
  * Represents a chain of jellyfish blocks.
@@ -140,6 +143,26 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath);
  * @return The output string if a close match is found, or "Unknown" if not found.
  */
 const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const char *input);
+
+/**
+ * Get the reason chain for a given input.
+ * This function provides a detailed explanation of how the AI arrived at its reasoning.
+ * 
+ * @param chain Pointer to the jellyfish chain.
+ * @param input The input string to reason about.
+ * @param depth The depth of reasoning to explore (0 for no depth).
+ * @return A string explaining the reasoning process, or "Unknown" if not found.
+ */
+const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const char *input, int depth);
+
+/**
+ * Decay the confidence of the jellyfish chain.
+ * This reduces the confidence of all blocks in the chain by a specified decay rate.
+ * 
+ * @param chain Pointer to the jellyfish chain.
+ * @param decay_rate The rate at which to decay confidence (0.0 - 1.0).
+ */
+void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate);
 
 
 #ifdef __cplusplus
@@ -274,6 +297,29 @@ namespace ai {
          */
         int load(const std::string &filepath) {
             return fossil_jellyfish_load(&chain, filepath.c_str());
+        }
+
+        /**
+         * Get the reason chain for a given input.
+         * This function provides a detailed explanation of how the AI arrived at its reasoning.
+         *
+         * @param input The input string to reason about.
+         * @param depth The depth of reasoning to explore (0 for no depth).
+         * @return A string explaining the reasoning process, or "Unknown" if not found.
+         */
+        std::string reason_chain(const std::string &input, int depth = 0) {
+            const char *result = fossil_jellyfish_reason_chain(&chain, input.c_str(), depth);
+            return std::string(result);
+        }
+
+        /**
+         * Decay the confidence of the jellyfish chain.
+         * This reduces the confidence of all blocks in the chain by a specified decay rate.
+         *
+         * @param decay_rate The rate at which to decay confidence (0.0 - 1.0).
+         */
+        void decay_confidence(float decay_rate) {
+            fossil_jellyfish_decay_confidence(&chain, decay_rate);
         }
 
     private:
