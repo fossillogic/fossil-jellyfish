@@ -136,13 +136,30 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
     return 1;
 }
 
-// Simple Levenshtein-like distance (cost is # of mismatched chars)
 static int fossil_jellyfish_similarity(const char *a, const char *b) {
-    int score = 0;
-    for (int i = 0; a[i] && b[i]; ++i) {
-        if (a[i] != b[i]) score++;
+    int cost = 0;
+    size_t i = 0, j = 0;
+
+    while (a[i] && b[j]) {
+        char ac = a[i];
+        char bc = b[j];
+
+        // case-insensitive match
+        if (ac >= 'A' && ac <= 'Z') ac += 32;
+        if (bc >= 'A' && bc <= 'Z') bc += 32;
+
+        if (ac != bc) {
+            cost++;
+        }
+        i++;
+        j++;
     }
-    return score;
+
+    // Penalty for remaining characters
+    while (a[i++]) cost++;
+    while (b[j++]) cost++;
+
+    return cost;
 }
 
 const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const char *input) {
@@ -153,31 +170,56 @@ const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const c
         if (!chain->memory[i].valid) continue;
 
         int score = fossil_jellyfish_similarity(input, chain->memory[i].input);
+        if (score == 0) return chain->memory[i].output; // Exact match
         if (score < best_score) {
             best_score = score;
             best_output = chain->memory[i].output;
         }
     }
 
+    // impose a fuzzy threshold
+    if (best_score > (int)(strlen(input) / 2)) {
+        return "Unknown";
+    }
+
     return best_output;
 }
 
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate) {
+    const float MIN_CONFIDENCE = 0.05f;
+
     for (size_t i = 0; i < chain->count; ++i) {
         if (!chain->memory[i].valid) continue;
 
-        chain->memory[i].confidence -= decay_rate;
-        if (chain->memory[i].confidence < 0.05f) {
-            chain->memory[i].valid = 0; // mark for cleanup
+        // Apply exponential decay
+        chain->memory[i].confidence *= (1.0f - decay_rate);
+
+        // Clamp to zero
+        if (chain->memory[i].confidence < 0.0f) {
+            chain->memory[i].confidence = 0.0f;
+        }
+
+        // Invalidate if confidence too low
+        if (chain->memory[i].confidence < MIN_CONFIDENCE) {
+            chain->memory[i].valid = 0;
         }
     }
 }
 
 const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const char *input, int depth) {
-    if (depth <= 0) return input;
+    const char *current = input;
+    const char *last_valid = input;
 
-    const char *first = fossil_jellyfish_reason_fuzzy(chain, input);
-    if (strcmp(first, "Unknown") == 0) return first;
+    for (int i = 0; i < depth; ++i) {
+        const char *next = fossil_jellyfish_reason_fuzzy(chain, current);
 
-    return fossil_jellyfish_reason_chain(chain, first, depth - 1);
+        if (strcmp(next, "Unknown") == 0 || strcmp(next, current) == 0) {
+            break;
+        }
+
+        last_valid = next;
+        current = next;
+    }
+
+    return last_valid;
 }
