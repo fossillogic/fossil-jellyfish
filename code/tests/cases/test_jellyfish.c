@@ -225,6 +225,42 @@ FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
     ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "x");
 }
 
+FOSSIL_TEST_CASE(c_test_jellyfish_export_import_fish) {
+    fossil_jellyfish_chain original, loaded;
+    fossil_jellyfish_init(&original);
+    fossil_jellyfish_init(&loaded);
+
+    fossil_jellyfish_learn(&original, "sun", "hot");
+    fossil_jellyfish_learn(&original, "moon", "cold");
+
+    const char *fish_path = "test_model.fish";
+
+    // Export to .fish
+    int export_ok = fossil_jellyfish_export_fish(&original, fish_path);
+    ASSUME_ITS_TRUE(export_ok == 1);
+
+    // Import back
+    int import_ok = fossil_jellyfish_import_fish(&loaded, fish_path);
+    ASSUME_ITS_TRUE(import_ok == 1);
+
+    ASSUME_ITS_EQUAL_SIZE(loaded.count, 2);
+    ASSUME_ITS_EQUAL_CSTR(loaded.memory[0].input, "sun");
+    ASSUME_ITS_EQUAL_CSTR(loaded.memory[0].output, "hot");
+    ASSUME_ITS_EQUAL_CSTR(loaded.memory[1].input, "moon");
+    ASSUME_ITS_EQUAL_CSTR(loaded.memory[1].output, "cold");
+
+    // Clean up test file
+    remove(fish_path);
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_import_fish_fail) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+
+    int result = fossil_jellyfish_import_fish(&chain, "nonexistent_model.fish");
+    ASSUME_ITS_TRUE(result == 0);
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -241,6 +277,8 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_fuzzy);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_chain);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_decay_confidence);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_export_import_fish);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_import_fish_fail);
 
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
 } // end of tests
