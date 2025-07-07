@@ -230,7 +230,7 @@ int fossil_jellyfish_export_fish(const fossil_jellyfish_chain *chain, const char
     if (!fp) return 0;
 
     for (size_t i = 0; i < chain->count; ++i) {
-        fossil_jellyfish_block *b = &chain->memory[i];
+        const fossil_jellyfish_block *b = &chain->memory[i];  // ✅ FIXED
         if (!b->valid) continue;
 
         fprintf(fp, "[FISH_BLOCK]\n");
