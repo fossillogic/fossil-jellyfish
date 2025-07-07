@@ -14,6 +14,7 @@
 #include "fossil/ai/jellyfish.h"
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <time.h>
 
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
@@ -223,3 +224,80 @@ const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const c
 
     return last_valid;
 }
+
+int fossil_jellyfish_export_fish(const fossil_jellyfish_chain *chain, const char *filepath) {
+    FILE *fp = fopen(filepath, "w");
+    if (!fp) return 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        fprintf(fp, "[FISH_BLOCK]\n");
+        fprintf(fp, "INPUT: %s\n", b->input);
+        fprintf(fp, "OUTPUT: %s\n", b->output);
+        fprintf(fp, "CONFIDENCE: %.3f\n", b->confidence);
+        fprintf(fp, "USAGE: %u\n", b->usage_count);
+        fprintf(fp, "TIME: %llu\n", (unsigned long long)b->timestamp);
+        fprintf(fp, "HASH: ");
+        for (int j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j)
+            fprintf(fp, "%02x", b->hash[j]);
+        fprintf(fp, "\n[/FISH_BLOCK]\n\n");
+    }
+
+    fclose(fp);
+    return 1;
+}
+
+static void strip_newline(char *s) {
+    size_t len = strlen(s);
+    if (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r'))
+        s[len - 1] = '\0';
+}
+
+int fossil_jellyfish_import_fish(fossil_jellyfish_chain *chain, const char *filepath) {
+    FILE *fp = fopen(filepath, "r");
+    if (!fp) return 0;
+
+    char line[256];
+    fossil_jellyfish_block temp = {0};
+    int in_block = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        strip_newline(line);
+
+        if (strcmp(line, "[FISH_BLOCK]") == 0) {
+            memset(&temp, 0, sizeof(temp));
+            in_block = 1;
+        } else if (strcmp(line, "[/FISH_BLOCK]") == 0 && in_block) {
+            if (chain->count < FOSSIL_JELLYFISH_MAX_MEM) {
+                chain->memory[chain->count++] = temp;
+            }
+            in_block = 0;
+        } else if (in_block) {
+            if (strncmp(line, "INPUT: ", 7) == 0)
+                strncpy(temp.input, line + 7, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+            else if (strncmp(line, "OUTPUT: ", 8) == 0)
+                strncpy(temp.output, line + 8, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+            else if (strncmp(line, "CONFIDENCE: ", 12) == 0)
+                temp.confidence = (float)atof(line + 12);
+            else if (strncmp(line, "USAGE: ", 7) == 0)
+                temp.usage_count = (uint32_t)atoi(line + 7);
+            else if (strncmp(line, "TIME: ", 6) == 0)
+                temp.timestamp = (uint64_t)atoll(line + 6);
+            else if (strncmp(line, "HASH: ", 6) == 0) {
+                const char *h = line + 6;
+                for (int i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE && h[i * 2]; ++i) {
+                    unsigned int byte;
+                    sscanf(h + i * 2, "%02x", &byte);
+                    temp.hash[i] = (uint8_t)byte;
+                }
+            }
+            temp.valid = 1;
+        }
+    }
+
+    fclose(fp);
+    return 1;
+}
+
