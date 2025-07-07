@@ -261,7 +261,8 @@ int fossil_jellyfish_import_fish(fossil_jellyfish_chain *chain, const char *file
     if (!fp) return 0;
 
     char line[256];
-    fossil_jellyfish_block temp = {{0}};
+    fossil_jellyfish_block temp;
+    memset(&temp, 0, sizeof(temp));
     int in_block = 0;
 
     while (fgets(line, sizeof(line), fp)) {
