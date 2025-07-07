@@ -327,11 +327,11 @@ namespace ai {
 
     // Export/import the AI chain as a human-readable .fish tape file
     int export_fish(const std::string filepath) {
-        fossil_jellyfish_export_fish(&chain, filepath.c_str());
+        return fossil_jellyfish_export_fish(&chain, filepath.c_str());
     }
 
     int import_fish(const std::string filepath) {
-        fossil_jellyfish_import_fish(&chain, filepath.c_str());
+        return fossil_jellyfish_import_fish(&chain, filepath.c_str());
     }
 
     private:
