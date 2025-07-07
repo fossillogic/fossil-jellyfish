@@ -164,6 +164,9 @@ const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const c
  */
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate);
 
+// Export/import the AI chain as a human-readable .fish tape file
+int fossil_jellyfish_export_fish(const fossil_jellyfish_chain *chain, const char *filepath);
+int fossil_jellyfish_import_fish(fossil_jellyfish_chain *chain, const char *filepath);
 
 #ifdef __cplusplus
 }
