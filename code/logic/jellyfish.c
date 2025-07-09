@@ -168,24 +168,64 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain *chain) {
     }
 }
 
-int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filepath) {
-    FILE *fp = fopen(filepath, "wb");
-    if (!fp) return 0;
-
-    fwrite(&chain->count, sizeof(size_t), 1, fp);
-    fwrite(chain->memory, sizeof(fossil_jellyfish_block), chain->count, fp);
-    fclose(fp);
-    return 1;
-}
-
 int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
     FILE *fp = fopen(filepath, "rb");
     if (!fp) return 0;
 
-    fread(&chain->count, sizeof(size_t), 1, fp);
-    if (chain->count > FOSSIL_JELLYFISH_MAX_MEM) chain->count = FOSSIL_JELLYFISH_MAX_MEM;
+    // Optional: check file signature
+    char sig[4];
+    if (fread(sig, sizeof(char), 4, fp) != 4) {
+        fclose(fp);
+        return 0;
+    }
+    if (sig[0] != 'J' || sig[1] != 'F' || sig[2] != 'S' || sig[3] != '1') {
+        fclose(fp);
+        return 0;
+    }
 
-    fread(chain->memory, sizeof(fossil_jellyfish_block), chain->count, fp);
+    size_t count = 0;
+    if (fread(&count, sizeof(size_t), 1, fp) != 1) {
+        fclose(fp);
+        return 0;
+    }
+
+    if (count > FOSSIL_JELLYFISH_MAX_MEM) {
+        fclose(fp);
+        return 0;
+    }
+
+    if (fread(chain->memory, sizeof(fossil_jellyfish_block), count, fp) != count) {
+        fclose(fp);
+        return 0;
+    }
+
+    chain->count = count;
+    fclose(fp);
+    return 1;
+}
+
+int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filepath) {
+    FILE *fp = fopen(filepath, "wb");
+    if (!fp) return 0;
+
+    // Optional: write file signature
+    const char sig[4] = { 'J', 'F', 'S', '1' };
+    if (fwrite(sig, sizeof(char), 4, fp) != 4) {
+        fclose(fp);
+        return 0;
+    }
+
+    if (fwrite(&chain->count, sizeof(size_t), 1, fp) != 1) {
+        fclose(fp);
+        return 0;
+    }
+
+    if (fwrite(chain->memory, sizeof(fossil_jellyfish_block), chain->count, fp) != chain->count) {
+        fclose(fp);
+        return 0;
+    }
+
+    fflush(fp);
     fclose(fp);
     return 1;
 }
