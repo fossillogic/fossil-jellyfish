@@ -309,3 +309,83 @@ const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char
     }
     return best_output;
 }
+
+size_t fossil_jellyfish_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens) {
+    size_t token_count = 0;
+    size_t len = strlen(input);
+    size_t i = 0;
+
+    while (i < len && token_count < max_tokens) {
+        // Skip leading non-alphanum
+        while (i < len && !isalnum(input[i])) i++;
+        if (i >= len) break;
+
+        // Extract token
+        size_t t = 0;
+        while (i < len && isalnum(input[i]) && t < FOSSIL_JELLYFISH_TOKEN_SIZE - 1) {
+            tokens[token_count][t++] = tolower(input[i++]);
+        }
+        tokens[token_count][t] = '\0';
+        token_count++;
+    }
+
+    return token_count;
+}
+
+const fossil_jellyfish_block *fossil_jellyfish_best_memory(const fossil_jellyfish_chain *chain) {
+    const fossil_jellyfish_block *best = NULL;
+    float best_score = 0.0f;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+        if (b->confidence > best_score) {
+            best_score = b->confidence;
+            best = b;
+        }
+    }
+
+    return best;
+}
+
+float fossil_jellyfish_knowledge_coverage(const fossil_jellyfish_chain *chain) {
+    if (chain->count == 0) return 0.0f;
+
+    size_t valid = 0;
+    for (size_t i = 0; i < chain->count; ++i) {
+        if (chain->memory[i].valid) valid++;
+    }
+
+    return (float)valid / (float)chain->count;
+}
+
+int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const char *input, const char *output) {
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+        if (strncmp(b->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
+            if (strncmp(b->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE) != 0) {
+                return 1; // conflicting output
+            }
+        }
+    }
+    return 0;
+}
+
+void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
+    printf("== Jellyfish Self-Reflection ==\n");
+    printf("Total Memories: %zu\n", chain->count);
+    printf("Valid Memories: %zu\n", (size_t)(fossil_jellyfish_knowledge_coverage(chain) * chain->count));
+
+    const fossil_jellyfish_block *best = fossil_jellyfish_best_memory(chain);
+    if (best) {
+        printf("Strongest Memory:\n");
+        printf("  Input : %s\n", best->input);
+        printf("  Output: %s\n", best->output);
+        printf("  Confidence: %.2f\n", best->confidence);
+        printf("  Usage Count: %u\n", best->usage_count);
+    } else {
+        printf("No confident memories yet.\n");
+    }
+    printf("================================\n");
+}
