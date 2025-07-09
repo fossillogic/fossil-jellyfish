@@ -410,7 +410,7 @@ namespace ai {
      * @param input Input question or query.
      * @return The best known answer string, or "Unknown".
      */
-    std::string reason(const std::string &input) {
+    std::string mind_reason(const std::string &input) {
         return std::string(fossil_jellyfish_mind_reason(&mind, input.c_str()));
     }
 
