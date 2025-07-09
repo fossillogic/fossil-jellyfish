@@ -374,8 +374,8 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
 
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
     printf("== Jellyfish Self-Reflection ==\n");
-    printf("Total Memories: %zu\n", chain->count);
-    printf("Valid Memories: %zu\n", (size_t)(fossil_jellyfish_knowledge_coverage(chain) * chain->count));
+    printf("Total Memories: %llu\n", (unsigned long long)chain->count);
+    printf("Valid Memories: %llu\n", (unsigned long long)(fossil_jellyfish_knowledge_coverage(chain) * chain->count));
 
     const fossil_jellyfish_block *best = fossil_jellyfish_best_memory(chain);
     if (best) {
