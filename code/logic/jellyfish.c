@@ -278,80 +278,34 @@ const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const c
     return last_valid;
 }
 
-int fossil_jellyfish_export_fish(const fossil_jellyfish_chain *chain, const char *filepath) {
-    FILE *fp = fopen(filepath, "w");
-    if (!fp) return 0;
+int fossil_jellyfish_mind_load_model(fossil_jellyfish_mind *mind, const char *filepath, const char *name) {
+    if (mind->model_count >= FOSSIL_JELLYFISH_MAX_MODELS) return 0;
 
-    for (size_t i = 0; i < chain->count; ++i) {
-        const fossil_jellyfish_block *b = &chain->memory[i];  // ✅ FIXED
-        if (!b->valid) continue;
+    fossil_jellyfish_chain *target = &mind->models[mind->model_count];
+    if (!fossil_jellyfish_load(target, filepath)) return 0;
 
-        fprintf(fp, "[FISH_BLOCK]\n");
-        fprintf(fp, "INPUT: %s\n", b->input);
-        fprintf(fp, "OUTPUT: %s\n", b->output);
-        fprintf(fp, "CONFIDENCE: %.3f\n", b->confidence);
-        fprintf(fp, "USAGE: %u\n", b->usage_count);
-        fprintf(fp, "TIME: %llu\n", (unsigned long long)b->timestamp);
-        fprintf(fp, "HASH: ");
-        for (int j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j)
-            fprintf(fp, "%02x", b->hash[j]);
-        fprintf(fp, "\n[/FISH_BLOCK]\n\n");
-    }
-
-    fclose(fp);
+    strncpy(mind->model_names[mind->model_count], name, 63);
+    mind->model_names[mind->model_count][63] = '\0';
+    mind->model_count++;
     return 1;
 }
 
-static void strip_newline(char *s) {
-    size_t len = strlen(s);
-    if (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r'))
-        s[len - 1] = '\0';
-}
+const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char *input) {
+    const char *best_output = "Unknown";
+    float best_confidence = 0.0f;
 
-int fossil_jellyfish_import_fish(fossil_jellyfish_chain *chain, const char *filepath) {
-    FILE *fp = fopen(filepath, "r");
-    if (!fp) return 0;
-
-    char line[256];
-    fossil_jellyfish_block temp;
-    memset(&temp, 0, sizeof(temp));
-    int in_block = 0;
-
-    while (fgets(line, sizeof(line), fp)) {
-        strip_newline(line);
-
-        if (strcmp(line, "[FISH_BLOCK]") == 0) {
-            memset(&temp, 0, sizeof(temp));
-            in_block = 1;
-        } else if (strcmp(line, "[/FISH_BLOCK]") == 0 && in_block) {
-            if (chain->count < FOSSIL_JELLYFISH_MAX_MEM) {
-                chain->memory[chain->count++] = temp;
-            }
-            in_block = 0;
-        } else if (in_block) {
-            if (strncmp(line, "INPUT: ", 7) == 0)
-                strncpy(temp.input, line + 7, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
-            else if (strncmp(line, "OUTPUT: ", 8) == 0)
-                strncpy(temp.output, line + 8, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
-            else if (strncmp(line, "CONFIDENCE: ", 12) == 0)
-                temp.confidence = (float)atof(line + 12);
-            else if (strncmp(line, "USAGE: ", 7) == 0)
-                temp.usage_count = (uint32_t)atoi(line + 7);
-            else if (strncmp(line, "TIME: ", 6) == 0)
-                temp.timestamp = (uint64_t)atoll(line + 6);
-            else if (strncmp(line, "HASH: ", 6) == 0) {
-                const char *h = line + 6;
-                for (int i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE && h[i * 2]; ++i) {
-                    unsigned int byte;
-                    sscanf(h + i * 2, "%02x", &byte);
-                    temp.hash[i] = (uint8_t)byte;
+    for (size_t i = 0; i < mind->model_count; ++i) {
+        fossil_jellyfish_chain *model = &mind->models[i];
+        for (size_t j = 0; j < model->count; ++j) {
+            fossil_jellyfish_block *b = &model->memory[j];
+            if (!b->valid) continue;
+            if (strncmp(b->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
+                if (b->confidence > best_confidence) {
+                    best_output = b->output;
+                    best_confidence = b->confidence;
                 }
             }
-            temp.valid = 1;
         }
     }
-
-    fclose(fp);
-    return 1;
+    return best_output;
 }
-
