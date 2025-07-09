@@ -21,6 +21,7 @@
 #define FOSSIL_JELLYFISH_HASH_SIZE 32
 #define FOSSIL_JELLYFISH_INPUT_SIZE 64
 #define FOSSIL_JELLYFISH_OUTPUT_SIZE 64
+#define FOSSIL_JELLYFISH_MAX_MODELS 32
 
 #ifdef __cplusplus
 extern "C"
@@ -54,6 +55,12 @@ typedef struct {
     fossil_jellyfish_block memory[FOSSIL_JELLYFISH_MAX_MEM];
     size_t count;
 } fossil_jellyfish_chain;
+
+typedef struct {
+    fossil_jellyfish_chain models[FOSSIL_JELLYFISH_MAX_MODELS];
+    char model_names[FOSSIL_JELLYFISH_MAX_MODELS][64];
+    size_t model_count;
+} fossil_jellyfish_mind;
 
 // *****************************************************************************
 // Function prototypes
@@ -164,9 +171,8 @@ const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const c
  */
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate);
 
-// Export/import the AI chain as a human-readable .fish tape file
-int fossil_jellyfish_export_fish(const fossil_jellyfish_chain *chain, const char *filepath);
-int fossil_jellyfish_import_fish(fossil_jellyfish_chain *chain, const char *filepath);
+int fossil_jellyfish_mind_load_model(fossil_jellyfish_mind *mind, const char *filepath, const char *name);
+const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char *input);
 
 #ifdef __cplusplus
 }
