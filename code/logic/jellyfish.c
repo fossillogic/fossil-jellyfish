@@ -64,13 +64,41 @@ void fossil_jellyfish_init(fossil_jellyfish_chain *chain) {
 }
 
 void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, const char *output) {
+    // Step 1: Check if input-output pair already exists
+    for (size_t i = 0; i < chain->count; ++i) {
+        fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) continue;
+        if (strncmp(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0 &&
+            strncmp(block->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE) == 0) {
+            // Already learned: reinforce instead
+            block->confidence += 0.1f;
+            if (block->confidence > 1.0f) block->confidence = 1.0f;
+            block->usage_count += 1;
+            block->timestamp = (uint64_t)time(NULL);
+            return;
+        }
+    }
+
+    // Step 2: Handle memory overflow
     if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM) {
         fossil_jellyfish_cleanup(chain);
     }
 
+    // Step 3: Confirm space exists
+    if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM) {
+        return; // Still no space — silently reject
+    }
+
+    // Step 4: Write new block
     fossil_jellyfish_block *block = &chain->memory[chain->count++];
+
+    // Safe copy with guaranteed null-termination
     strncpy(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+    block->input[FOSSIL_JELLYFISH_INPUT_SIZE - 1] = '\0';
+
     strncpy(block->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+    block->output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
+
     block->timestamp = (uint64_t)time(NULL);
     block->valid = 1;
     block->confidence = 1.0f;
