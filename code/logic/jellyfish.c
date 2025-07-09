@@ -65,7 +65,7 @@ void fossil_jellyfish_init(fossil_jellyfish_chain *chain) {
 
 void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, const char *output) {
     // Step 1: Check if input-output pair already exists
-    for (size_t i = 0; i < chain->count; ++i) {
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
         fossil_jellyfish_block *block = &chain->memory[i];
         if (!block->valid) continue;
         if (strncmp(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0 &&
@@ -79,32 +79,53 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, co
         }
     }
 
-    // Step 2: Handle memory overflow
-    if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM) {
-        fossil_jellyfish_cleanup(chain);
+    // Step 2: Try to find an unused (invalid) slot to reuse
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
+        fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) {
+            // Reuse this slot
+            strncpy(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+            block->input[FOSSIL_JELLYFISH_INPUT_SIZE - 1] = '\0';
+
+            strncpy(block->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+            block->output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
+
+            block->timestamp = (uint64_t)time(NULL);
+            block->valid = 1;
+            block->confidence = 1.0f;
+            block->usage_count = 0;
+
+            fossil_jellyfish_hash(input, output, block->hash);
+
+            chain->count += 1;
+            return;
+        }
     }
 
-    // Step 3: Confirm space exists
-    if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM) {
-        return; // Still no space — silently reject
+    // Step 3: All slots full, run cleanup
+    fossil_jellyfish_cleanup(chain);
+
+    // Step 4: Try again to find a reusable slot after cleanup
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
+        fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) {
+            strncpy(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+            block->input[FOSSIL_JELLYFISH_INPUT_SIZE - 1] = '\0';
+
+            strncpy(block->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+            block->output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
+
+            block->timestamp = (uint64_t)time(NULL);
+            block->valid = 1;
+            block->confidence = 1.0f;
+            block->usage_count = 0;
+
+            fossil_jellyfish_hash(input, output, block->hash);
+
+            chain->count += 1;
+            return;
+        }
     }
-
-    // Step 4: Write new block
-    fossil_jellyfish_block *block = &chain->memory[chain->count++];
-
-    // Safe copy with guaranteed null-termination
-    strncpy(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
-    block->input[FOSSIL_JELLYFISH_INPUT_SIZE - 1] = '\0';
-
-    strncpy(block->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
-    block->output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
-
-    block->timestamp = (uint64_t)time(NULL);
-    block->valid = 1;
-    block->confidence = 1.0f;
-    block->usage_count = 0;
-
-    fossil_jellyfish_hash(input, output, block->hash);
 }
 
 const char* fossil_jellyfish_reason(fossil_jellyfish_chain *chain, const char *input) {
@@ -122,9 +143,12 @@ const char* fossil_jellyfish_reason(fossil_jellyfish_chain *chain, const char *i
 // Removes blocks that are older and marked invalid (or just garbage collect oldest)
 void fossil_jellyfish_cleanup(fossil_jellyfish_chain *chain) {
     size_t new_count = 0;
-    for (size_t i = 0; i < chain->count; ++i) {
-        if (chain->memory[i].valid && chain->memory[i].confidence >= 0.05f) {
-            chain->memory[new_count++] = chain->memory[i];
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
+        if (!chain->memory[i].valid) continue;
+        if (chain->memory[i].confidence < 0.05f) {
+            chain->memory[i].valid = 0;
+        } else {
+            new_count++;
         }
     }
     chain->count = new_count;
