@@ -173,22 +173,67 @@ const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const c
  */
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate);
 
+/**
+ * Loads a named memory model from a file into the specified mind.
+ *
+ * @param mind      Pointer to the target mind structure.
+ * @param filepath  Path to the .fish or binary model file.
+ * @param name      Name to associate with the loaded model.
+ * @return          1 if successful, 0 on failure.
+ */
 int fossil_jellyfish_mind_load_model(fossil_jellyfish_mind *mind, const char *filepath, const char *name);
+
+/**
+ * Performs reasoning using the mind's active memory chain.
+ *
+ * @param mind   Pointer to the mind structure.
+ * @param input  Input question or statement to reason about.
+ * @return       Output string representing the closest known answer or reasoning result.
+ */
 const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char *input);
 
-// Tokenizes input into lowercase words, returns number of tokens found
+/**
+ * Tokenizes a given input string into lowercase word tokens.
+ *
+ * @param input       Null-terminated string to tokenize.
+ * @param tokens      2D array to store output tokens (each max FOSSIL_JELLYFISH_TOKEN_SIZE).
+ * @param max_tokens  Maximum number of tokens to extract.
+ * @return            The number of tokens actually written to the tokens array.
+ */
 size_t fossil_jellyfish_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens);
 
-// Returns pointer to highest-confidence memory block
+/**
+ * Returns a pointer to the memory block in the chain with the highest confidence score.
+ *
+ * @param chain  Pointer to the memory chain.
+ * @return       Pointer to the best fossil_jellyfish_block, or NULL if no valid memory exists.
+ */
 const fossil_jellyfish_block *fossil_jellyfish_best_memory(const fossil_jellyfish_chain *chain);
 
-// Calculates a "knowledge coverage" score (0.0 - 1.0)
+/**
+ * Calculates a normalized score representing how "full" or utilized the knowledge base is.
+ *
+ * @param chain  Pointer to the memory chain.
+ * @return       Float between 0.0 and 1.0 indicating knowledge coverage.
+ */
 float fossil_jellyfish_knowledge_coverage(const fossil_jellyfish_chain *chain);
 
-// Checks for contradictions with existing memory
+/**
+ * Checks if adding a given input-output pair would contradict existing memory.
+ *
+ * @param chain   Pointer to the memory chain.
+ * @param input   Input to check.
+ * @param output  Output to check.
+ * @return        1 if a conflict is found, 0 otherwise.
+ */
 int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const char *input, const char *output);
 
-// Prints a self-reflection summary to stdout
+/**
+ * Prints a self-reflection report of the current memory chain to stdout.
+ * Includes memory size, confidence distribution, usage patterns, and top entries.
+ *
+ * @param chain  Pointer to the memory chain to reflect on.
+ */
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
 
 #ifdef __cplusplus
