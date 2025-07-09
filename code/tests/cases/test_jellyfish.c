@@ -226,7 +226,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_mind_load_model) {
-    fossil_jellyfish_mind mind = {0};
+    fossil_jellyfish_mind mind;
+    memset(&mind, 0, sizeof(fossil_jellyfish_mind));
     fossil_jellyfish_chain chain;
     fossil_jellyfish_init(&chain);
     fossil_jellyfish_learn(&chain, "cpu", "central processing unit");
@@ -250,7 +251,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_mind_load_model) {
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_mind_reason) {
-    fossil_jellyfish_mind mind = {0};
+    fossil_jellyfish_mind mind;
+    memset(&mind, 0, sizeof(fossil_jellyfish_mind));
 
     fossil_jellyfish_chain logic;
     fossil_jellyfish_init(&logic);
