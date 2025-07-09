@@ -22,6 +22,8 @@
 #define FOSSIL_JELLYFISH_INPUT_SIZE 64
 #define FOSSIL_JELLYFISH_OUTPUT_SIZE 64
 #define FOSSIL_JELLYFISH_MAX_MODELS 32
+#define FOSSIL_JELLYFISH_MAX_TOKENS 16
+#define FOSSIL_JELLYFISH_TOKEN_SIZE 16
 
 #ifdef __cplusplus
 extern "C"
@@ -173,6 +175,21 @@ void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float deca
 
 int fossil_jellyfish_mind_load_model(fossil_jellyfish_mind *mind, const char *filepath, const char *name);
 const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char *input);
+
+// Tokenizes input into lowercase words, returns number of tokens found
+size_t fossil_jellyfish_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens);
+
+// Returns pointer to highest-confidence memory block
+const fossil_jellyfish_block *fossil_jellyfish_best_memory(const fossil_jellyfish_chain *chain);
+
+// Calculates a "knowledge coverage" score (0.0 - 1.0)
+float fossil_jellyfish_knowledge_coverage(const fossil_jellyfish_chain *chain);
+
+// Checks for contradictions with existing memory
+int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const char *input, const char *output);
+
+// Prints a self-reflection summary to stdout
+void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
 
 #ifdef __cplusplus
 }
