@@ -331,15 +331,6 @@ namespace ai {
             fossil_jellyfish_decay_confidence(&chain, decay_rate);
         }
 
-    // Export/import the AI chain as a human-readable .fish tape file
-    int export_fish(const std::string filepath) {
-        return fossil_jellyfish_export_fish(&chain, filepath.c_str());
-    }
-
-    int import_fish(const std::string filepath) {
-        return fossil_jellyfish_import_fish(&chain, filepath.c_str());
-    }
-
     private:
         fossil_jellyfish_chain chain; // The jellyfish chain instance
     };
