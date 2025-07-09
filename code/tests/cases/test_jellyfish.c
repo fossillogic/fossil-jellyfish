@@ -225,6 +225,86 @@ FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
     ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "x");
 }
 
+FOSSIL_TEST_CASE(c_test_jellyfish_mind_load_model) {
+    fossil_jellyfish_mind mind;
+    memset(&mind, 0, sizeof(fossil_jellyfish_mind));
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+    fossil_jellyfish_learn(&chain, "cpu", "central processing unit");
+
+    // Save the chain to simulate a model file
+    const char *path = "cpu_model.fish";
+    fossil_jellyfish_save(&chain, path);
+
+    // Load it into the mind
+    int ok = fossil_jellyfish_mind_load_model(&mind, path, "hardware");
+    ASSUME_ITS_TRUE(ok == 1);
+    ASSUME_ITS_EQUAL_SIZE(mind.model_count, 1);
+    ASSUME_ITS_EQUAL_CSTR(mind.model_names[0], "hardware");
+
+    // Validate content loaded into model slot
+    const fossil_jellyfish_chain *loaded = &mind.models[0];
+    ASSUME_ITS_EQUAL_SIZE(loaded->count, 1);
+    ASSUME_ITS_EQUAL_CSTR(loaded->memory[0].input, "cpu");
+
+    remove(path);
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_mind_reason) {
+    fossil_jellyfish_mind mind;
+    memset(&mind, 0, sizeof(fossil_jellyfish_mind));
+
+    fossil_jellyfish_chain logic;
+    fossil_jellyfish_init(&logic);
+    fossil_jellyfish_learn(&logic, "sun", "a star");
+
+    // Simulate preloaded model
+    mind.models[0] = logic;
+    strncpy(mind.model_names[0], "astronomy", 64);
+    mind.model_count = 1;
+
+    const char *result = fossil_jellyfish_mind_reason(&mind, "sun");
+    ASSUME_ITS_EQUAL_CSTR(result, "a star");
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_tokenize) {
+    char tokens[8][FOSSIL_JELLYFISH_TOKEN_SIZE];
+    const char *text = "What is a GPU?";
+
+    size_t count = fossil_jellyfish_tokenize(text, tokens, 8);
+    ASSUME_ITS_EQUAL_SIZE(count, 4);
+    ASSUME_ITS_EQUAL_CSTR(tokens[0], "what");
+    ASSUME_ITS_EQUAL_CSTR(tokens[1], "is");
+    ASSUME_ITS_EQUAL_CSTR(tokens[2], "a");
+    ASSUME_ITS_EQUAL_CSTR(tokens[3], "gpu");
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_best_memory) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+
+    fossil_jellyfish_learn(&chain, "1", "one");
+    fossil_jellyfish_learn(&chain, "2", "two");
+
+    chain.memory[0].confidence = 0.3f;
+    chain.memory[1].confidence = 0.9f;
+
+    const fossil_jellyfish_block *best = fossil_jellyfish_best_memory(&chain);
+    ASSUME_ITS_EQUAL_CSTR(best->input, "2");
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_detect_conflict) {
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+    fossil_jellyfish_learn(&chain, "earth", "round");
+
+    int conflict = fossil_jellyfish_detect_conflict(&chain, "earth", "flat");
+    ASSUME_ITS_TRUE(conflict == 1);
+
+    int no_conflict = fossil_jellyfish_detect_conflict(&chain, "earth", "round");
+    ASSUME_ITS_TRUE(no_conflict == 0);
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -241,6 +321,11 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_fuzzy);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_chain);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_decay_confidence);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_mind_load_model);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_mind_reason);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_tokenize);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_best_memory);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_detect_conflict);
 
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
 } // end of tests

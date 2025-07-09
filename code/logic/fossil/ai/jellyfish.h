@@ -21,6 +21,9 @@
 #define FOSSIL_JELLYFISH_HASH_SIZE 32
 #define FOSSIL_JELLYFISH_INPUT_SIZE 64
 #define FOSSIL_JELLYFISH_OUTPUT_SIZE 64
+#define FOSSIL_JELLYFISH_MAX_MODELS 32
+#define FOSSIL_JELLYFISH_MAX_TOKENS 16
+#define FOSSIL_JELLYFISH_TOKEN_SIZE 16
 
 #ifdef __cplusplus
 extern "C"
@@ -54,6 +57,12 @@ typedef struct {
     fossil_jellyfish_block memory[FOSSIL_JELLYFISH_MAX_MEM];
     size_t count;
 } fossil_jellyfish_chain;
+
+typedef struct {
+    fossil_jellyfish_chain models[FOSSIL_JELLYFISH_MAX_MODELS];
+    char model_names[FOSSIL_JELLYFISH_MAX_MODELS][64];
+    size_t model_count;
+} fossil_jellyfish_mind;
 
 // *****************************************************************************
 // Function prototypes
@@ -164,6 +173,68 @@ const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const c
  */
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate);
 
+/**
+ * Loads a named memory model from a file into the specified mind.
+ *
+ * @param mind      Pointer to the target mind structure.
+ * @param filepath  Path to the .fish or binary model file.
+ * @param name      Name to associate with the loaded model.
+ * @return          1 if successful, 0 on failure.
+ */
+int fossil_jellyfish_mind_load_model(fossil_jellyfish_mind *mind, const char *filepath, const char *name);
+
+/**
+ * Performs reasoning using the mind's active memory chain.
+ *
+ * @param mind   Pointer to the mind structure.
+ * @param input  Input question or statement to reason about.
+ * @return       Output string representing the closest known answer or reasoning result.
+ */
+const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char *input);
+
+/**
+ * Tokenizes a given input string into lowercase word tokens.
+ *
+ * @param input       Null-terminated string to tokenize.
+ * @param tokens      2D array to store output tokens (each max FOSSIL_JELLYFISH_TOKEN_SIZE).
+ * @param max_tokens  Maximum number of tokens to extract.
+ * @return            The number of tokens actually written to the tokens array.
+ */
+size_t fossil_jellyfish_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens);
+
+/**
+ * Returns a pointer to the memory block in the chain with the highest confidence score.
+ *
+ * @param chain  Pointer to the memory chain.
+ * @return       Pointer to the best fossil_jellyfish_block, or NULL if no valid memory exists.
+ */
+const fossil_jellyfish_block *fossil_jellyfish_best_memory(const fossil_jellyfish_chain *chain);
+
+/**
+ * Calculates a normalized score representing how "full" or utilized the knowledge base is.
+ *
+ * @param chain  Pointer to the memory chain.
+ * @return       Float between 0.0 and 1.0 indicating knowledge coverage.
+ */
+float fossil_jellyfish_knowledge_coverage(const fossil_jellyfish_chain *chain);
+
+/**
+ * Checks if adding a given input-output pair would contradict existing memory.
+ *
+ * @param chain   Pointer to the memory chain.
+ * @param input   Input to check.
+ * @param output  Output to check.
+ * @return        1 if a conflict is found, 0 otherwise.
+ */
+int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const char *input, const char *output);
+
+/**
+ * Prints a self-reflection report of the current memory chain to stdout.
+ * Includes memory size, confidence distribution, usage patterns, and top entries.
+ *
+ * @param chain  Pointer to the memory chain to reflect on.
+ */
+void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
 
 #ifdef __cplusplus
 }
@@ -321,8 +392,95 @@ namespace ai {
         void decay_confidence(float decay_rate) {
             fossil_jellyfish_decay_confidence(&chain, decay_rate);
         }
+        
+        /**
+     * @brief Load a named model into the mind from a .fish or binary file.
+     *
+     * @param filepath Path to the model file.
+     * @param name     Logical name for the model within the mind.
+     * @return True if loaded successfully, false on failure.
+     */
+    bool load_model(const std::string &filepath, const std::string &name) {
+        return fossil_jellyfish_mind_load_model(&mind, filepath.c_str(), name.c_str()) != 0;
+    }
+
+    /**
+     * @brief Perform reasoning across all loaded models.
+     *
+     * @param input Input question or query.
+     * @return The best known answer string, or "Unknown".
+     */
+    std::string mind_reason(const std::string &input) {
+        return std::string(fossil_jellyfish_mind_reason(&mind, input.c_str()));
+    }
+
+    /**
+     * @brief Tokenize the input string into lowercase word tokens.
+     *
+     * @param input The input string to tokenize.
+     * @return A vector of token strings (max size determined by macro).
+     */
+    std::vector<std::string> tokenize(const std::string &input) {
+        char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE] = {};
+        size_t count = fossil_jellyfish_tokenize(input.c_str(), tokens, FOSSIL_JELLYFISH_MAX_TOKENS);
+
+        std::vector<std::string> result;
+        for (size_t i = 0; i < count; ++i) {
+            result.emplace_back(tokens[i]);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get the memory block with the highest confidence.
+     *
+     * @param chain Reference to a memory chain.
+     * @return Pointer to the best memory block, or nullptr if none.
+     */
+    const fossil_jellyfish_block* best_memory(const fossil_jellyfish_chain &chain) const {
+        return fossil_jellyfish_best_memory(&chain);
+    }
+
+    /**
+     * @brief Get a knowledge coverage score from the given chain.
+     *
+     * @param chain Reference to the chain.
+     * @return A float from 0.0 to 1.0 indicating how full the chain is.
+     */
+    float knowledge_coverage(const fossil_jellyfish_chain &chain) const {
+        return fossil_jellyfish_knowledge_coverage(&chain);
+    }
+
+    /**
+     * @brief Check if the input-output pair conflicts with existing memory.
+     *
+     * @param chain  The chain to check against.
+     * @param input  Input string.
+     * @param output Output string.
+     * @return True if a contradiction exists, false otherwise.
+     */
+    bool detect_conflict(const fossil_jellyfish_chain &chain, const std::string &input, const std::string &output) const {
+        return fossil_jellyfish_detect_conflict(&chain, input.c_str(), output.c_str()) != 0;
+    }
+
+    /**
+     * @brief Print a self-reflection report about a chain.
+     *
+     * @param chain Reference to the memory chain to reflect on.
+     */
+    void reflect(const fossil_jellyfish_chain &chain) const {
+        fossil_jellyfish_reflect(&chain);
+    }
+
+    /**
+     * @brief Access the underlying C mind object.
+     *
+     * @return Reference to the mind struct.
+     */
+    fossil_jellyfish_mind& raw() { return mind; }
 
     private:
+        fossil_jellyfish_mind mind; ///< Internal mind state holding multiple chains/models.
         fossil_jellyfish_chain chain; // The jellyfish chain instance
     };
 
