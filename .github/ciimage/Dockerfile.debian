@@ -14,7 +14,7 @@ RUN apt-get update && \
     g++ \
     gdb \
     llvm \
-    libstdc++-dev \
+    libstdc++-12-dev \
     wget \
     python3 \
     python3-pip \
