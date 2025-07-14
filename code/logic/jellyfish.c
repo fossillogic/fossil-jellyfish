@@ -429,3 +429,110 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
     }
     printf("================================\n");
 }
+
+static void strip_quotes(char *str) {
+    size_t len = strlen(str);
+    if (len >= 2 && (str[0] == '\'' || str[0] == '"') && str[len - 1] == str[0]) {
+        memmove(str, str + 1, len - 2);
+        str[len - 2] = '\0';
+    }
+}
+
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_mindset *out_mindsets, int max_mindsets) {
+    FILE *fp = fopen(filepath, "r");
+    if (!fp) return 0;
+
+    char line[512];
+    fossil_jellyfish_mindset *current = NULL;
+    int mindset_count = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        char *trim = line;
+        while (*trim && isspace(*trim)) trim++;
+
+        if (strncmp(trim, "mindset(", 8) == 0) {
+            if (mindset_count >= max_mindsets) break;
+            current = &out_mindsets[mindset_count++];
+            memset(current, 0, sizeof(fossil_jellyfish_mindset));
+
+            char *start = strchr(trim, '(') + 1;
+            char *end = strchr(start, ')');
+            if (start && end) {
+                *end = '\0';
+                strncpy(current->name, start, sizeof(current->name) - 1);
+                strip_quotes(current->name);
+            }
+        }
+        else if (current && strstr(trim, "description:")) {
+            sscanf(trim, "description: %[^\n]", current->description);
+            strip_quotes(current->description);
+        }
+        else if (current && strstr(trim, "priority:")) {
+            sscanf(trim, "priority: %d", &current->priority);
+        }
+        else if (current && strstr(trim, "confidence_threshold:")) {
+            sscanf(trim, "confidence_threshold: %f", &current->confidence_threshold);
+        }
+        else if (current && strstr(trim, "activation_condition:")) {
+            sscanf(trim, "activation_condition: %[^\n]", current->activation_condition);
+            strip_quotes(current->activation_condition);
+        }
+        else if (current && strstr(trim, "models: [")) {
+            char *p = strchr(trim, '[') + 1;
+            while (p && *p && *p != ']') {
+                char model[256] = {0};
+                sscanf(p, "%[^,\n]", model);
+                strip_quotes(model);
+                if (strlen(model) > 0 && current->model_count < FOSSIL_JELLYFISH_MAX_MODEL_FILES) {
+                    strncpy(current->model_files[current->model_count++], model, 255);
+                }
+                p = strchr(p, ',');
+                if (p) p++;
+            }
+        }
+        else if (current && strstr(trim, "tags: [")) {
+            char *p = strchr(trim, '[') + 1;
+            while (p && *p && *p != ']') {
+                char tag[64] = {0};
+                sscanf(p, "%[^,\n]", tag);
+                strip_quotes(tag);
+                if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
+                    strncpy(current->tags[current->tag_count++], tag, 63);
+                }
+                p = strchr(p, ',');
+                if (p) p++;
+            }
+        }
+    }
+
+    fclose(fp);
+    return mindset_count;
+}
+
+int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset) {
+    if (strlen(mindset->name) == 0) return 0;
+    if (mindset->model_count == 0) return 0;
+    for (int i = 0; i < mindset->model_count; ++i) {
+        if (strstr(mindset->model_files[i], ".fish") == NULL) return 0;
+    }
+    return 1;
+}
+
+int fossil_jellyfish_load_mindset_file(const char *filepath, fossil_jellyfish_mind *mind) {
+    fossil_jellyfish_mindset sets[16];
+    int count = fossil_jellyfish_parse_jellyfish_file(filepath, sets, 16);
+    if (count <= 0) return 0;
+
+    for (int i = 0; i < count; ++i) {
+        if (!fossil_jellyfish_validate_mindset(&sets[i])) continue;
+        for (int j = 0; j < sets[i].model_count; ++j) {
+            if (mind->model_count >= FOSSIL_JELLYFISH_MAX_MODELS) break;
+            if (fossil_jellyfish_load(&mind->models[mind->model_count], sets[i].model_files[j]) == 0) {
+                strncpy(mind->model_names[mind->model_count], sets[i].model_files[j], 63);
+                mind->model_count++;
+            }
+        }
+    }
+
+    return 1;
+}
