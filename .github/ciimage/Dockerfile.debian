@@ -17,6 +17,7 @@ RUN apt-get update && \
     libstdc++-12-dev \
     wget \
     python3 \
+    python3-full \
     python3-pip \
     git \
     ca-certificates && \
