@@ -1,5 +1,5 @@
 # Use a specific Debian base image
-FROM debian:buster
+FROM debian:bookworm
 
 # Set environment variables to avoid interaction
 ENV DEBIAN_FRONTEND=noninteractive \
