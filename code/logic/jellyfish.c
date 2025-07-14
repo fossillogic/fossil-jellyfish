@@ -450,6 +450,22 @@ int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish
         char *trim = line;
         while (*trim && isspace(*trim)) trim++;
 
+        // Skip blank lines
+        if (*trim == '\0' || *trim == '\n') continue;
+
+        // Handle comments (lines starting with #, excluding logic tags)
+        if (*trim == '#' && trim[1] != ':') continue;
+
+        // Handle logic tags like #:taint-check or #:bootstrap
+        if (strncmp(trim, "#:", 2) == 0 && current) {
+            char tag[64] = {0};
+            sscanf(trim + 2, "%63s", tag);  // Skip "#:"
+            if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
+                strncpy(current->tags[current->tag_count++], tag, 63);
+            }
+            continue;
+        }
+
         if (strncmp(trim, "mindset(", 8) == 0) {
             if (mindset_count >= max_mindsets) break;
             current = &out_mindsets[mindset_count++];
