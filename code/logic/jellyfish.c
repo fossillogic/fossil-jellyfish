@@ -18,7 +18,6 @@
 #include <ctype.h>
 #include <time.h>
 
-
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
     const uint32_t FNV_PRIME = 0x01000193;
     uint32_t hash = 0x811c9dc5;
