@@ -2,8 +2,8 @@
 
 Jellyfish is a lightweight, portable AI library written in pure C with no external dependencies. Designed for embedded and trust-critical systems, it uses blockchain-inspired techniques to provide transparent, verifiable learning and memory. Each input/output interaction is stored as a cryptographically hashed block, forming a tamper-resistant chain of reasoning and decisions. The system can learn from past inputs, respond based on memory, and automatically prune outdated or irrelevant data. This makes fossil_jellyfish ideal for AI applications that demand traceability, minimal resource usage, and self-cleaning behavior.
 
-ʼʼʼmeson
-\# This is the primary logic bundle for TAI personality
+```meson
+# This is the primary logic bundle for TAI personality
 
 mindset('core_logic') {
   description: 'Fundamental AI building blocks'
@@ -16,8 +16,8 @@ mindset('core_logic') {
   tags: ['core']
   confidence_threshold: 0.5
 
-  \#:bootstrap
-  \#:taint-free
+  #:bootstrap
+  #:taint-free
 }
 
 # Another mindset with conditional loading
@@ -28,7 +28,7 @@ mindset('persona_trump') {
   priority: 10
   #:persona
 }
-ʼʼʼ
+```
 
 ## Key Features
 
