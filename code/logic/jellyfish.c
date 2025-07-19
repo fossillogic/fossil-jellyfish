@@ -12,6 +12,7 @@
  * -----------------------------------------------------------------------------
  */
 #include "fossil/ai/jellyfish.h"
+#include <inttypes.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
