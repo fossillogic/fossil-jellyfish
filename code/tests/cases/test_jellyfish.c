@@ -307,6 +307,120 @@ FOSSIL_TEST_CASE(c_test_jellyfish_detect_conflict) {
     ASSUME_ITS_TRUE(no_conflict == 0);
 }
 
+FOSSIL_TEST_CASE(c_test_parse_jellyfish_file_valid) {
+    const char *test_file = "valid.jellyfish";
+
+    FILE *f = fopen(test_file, "w");
+    fprintf(f,
+        "{\n"
+        "  \"signature\": \"JFS1\",\n"
+        "  \"blocks\": [\n"
+        "    {\n"
+        "      \"input\": \"apple\",\n"
+        "      \"output\": \"fruit\",\n"
+        "      \"timestamp\": 12345678\n"
+        "    }\n"
+        "  ]\n"
+        "}\n"
+    );
+    fclose(f);
+
+    fossil_jellyfish_mindset out[4] = {0};
+    int count = fossil_jellyfish_parse_jellyfish_file(test_file, out, 4);
+
+    ASSUME_ITS_EQUAL_SIZE(count, 1);
+    ASSUME_ITS_EQUAL_CSTR(out[0].chain.memory[0].input, "apple");
+    ASSUME_ITS_EQUAL_CSTR(out[0].chain.memory[0].output, "fruit");
+
+    remove(test_file);
+}
+
+FOSSIL_TEST_CASE(c_test_parse_jellyfish_file_valid) {
+    const char *test_file = "valid.jellyfish";
+
+    FILE *f = fopen(test_file, "w");
+    fprintf(f,
+        "{\n"
+        "  \"signature\": \"JFS1\",\n"
+        "  \"blocks\": [\n"
+        "    {\n"
+        "      \"input\": \"apple\",\n"
+        "      \"output\": \"fruit\",\n"
+        "      \"timestamp\": 12345678\n"
+        "    }\n"
+        "  ]\n"
+        "}\n"
+    );
+    fclose(f);
+
+    fossil_jellyfish_mindset out[4] = {0};
+    int count = fossil_jellyfish_parse_jellyfish_file(test_file, out, 4);
+
+    ASSUME_ITS_EQUAL_SIZE(count, 1);
+    ASSUME_ITS_EQUAL_CSTR(out[0].chain.memory[0].input, "apple");
+    ASSUME_ITS_EQUAL_CSTR(out[0].chain.memory[0].output, "fruit");
+
+    remove(test_file);
+}
+
+FOSSIL_TEST_CASE(c_test_load_mindset_file_valid) {
+    const char *model_file = "test_model.fish";
+    fossil_jellyfish_chain chain;
+    fossil_jellyfish_init(&chain);
+    fossil_jellyfish_learn(&chain, "sun", "star");
+    fossil_jellyfish_save(&chain, model_file);
+
+    const char *jelly_file = "test_valid.jellyfish";
+    FILE *f = fopen(jelly_file, "w");
+    fprintf(f,
+        "{\n"
+        "  \"signature\": \"JFS1\",\n"
+        "  \"blocks\": [\n"
+        "    {\n"
+        "      \"input\": \"%s\",\n"
+        "      \"output\": \"space\",\n"
+        "      \"timestamp\": 12345678\n"
+        "    }\n"
+        "  ]\n"
+        "}\n", model_file);
+    fclose(f);
+
+    fossil_jellyfish_mind mind;
+    memset(&mind, 0, sizeof(mind));
+    int ok = fossil_jellyfish_load_mindset_file(jelly_file, &mind);
+
+    ASSUME_ITS_TRUE(ok == 1);
+    ASSUME_ITS_EQUAL_SIZE(mind.model_count, 1);
+    ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[0].input, "sun");
+
+    remove(jelly_file);
+    remove(model_file);
+}
+
+FOSSIL_TEST_CASE(c_test_load_mindset_file_missing_model) {
+    const char *jelly_file = "bad_model_ref.jellyfish";
+    FILE *f = fopen(jelly_file, "w");
+    fprintf(f,
+        "{\n"
+        "  \"signature\": \"JFS1\",\n"
+        "  \"blocks\": [\n"
+        "    {\n"
+        "      \"input\": \"missing.fish\",\n"
+        "      \"output\": \"logic\",\n"
+        "      \"timestamp\": 0\n"
+        "    }\n"
+        "  ]\n"
+        "}\n");
+    fclose(f);
+
+    fossil_jellyfish_mind mind;
+    memset(&mind, 0, sizeof(mind));
+    int ok = fossil_jellyfish_load_mindset_file(jelly_file, &mind);
+    ASSUME_ITS_TRUE(ok == 0);
+
+    remove(jelly_file);
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -329,5 +443,13 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_best_memory);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_detect_conflict);
 
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_parse_jellyfish_file_valid);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_parse_jellyfish_file_invalid_path);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_validate_mindset_valid);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_validate_mindset_empty);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_load_mindset_file_valid);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_load_mindset_file_missing_model);
+
+    
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
 } // end of tests
