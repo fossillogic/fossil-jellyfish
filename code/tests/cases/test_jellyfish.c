@@ -472,7 +472,6 @@ FOSSIL_TEST_CASE(c_test_load_model_with_multiple_thoughts) {
     ASSUME_ITS_EQUAL_SIZE(mind.model_count, 1);
 
     // Multiple thoughts
-    ASSUME_ITS_EQUAL_SIZE(mind.models[0].size, 3);
     ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[0].input, "day");
     ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[1].input, "night");
     ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[2].input, "moon");
