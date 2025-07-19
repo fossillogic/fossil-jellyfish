@@ -12,11 +12,101 @@
  * -----------------------------------------------------------------------------
  */
 #include "fossil/ai/jellyfish.h"
+#include <inttypes.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <time.h>
+
+
+// Parses a string like: "key": "value"
+static bool match_key_value(const char **ptr, const char *key, const char *value) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    size_t klen = strlen(key);
+    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, key, klen) != 0 || strncmp(p + 1 + klen, "\":", 2) != 0)
+        return false;
+    p += klen + 3;
+    while (isspace(*p)) p++;
+    size_t vlen = strlen(value);
+    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, value, vlen) != 0 || strncmp(p + 1 + vlen, "\"", 1) != 0)
+        return false;
+    *ptr = p + vlen + 2;
+    return true;
+}
+
+static bool skip_key(const char **ptr, const char *key) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    size_t klen = strlen(key);
+    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, key, klen) != 0 || strncmp(p + 1 + klen, "\":", 2) != 0)
+        return false;
+    *ptr = p + klen + 3;
+    return true;
+}
+
+static bool skip_symbol(const char **ptr, char symbol) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    if (*p != symbol)
+        return false;
+    *ptr = p + 1;
+    return true;
+}
+
+static bool skip_comma(const char **ptr) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    if (*p == ',') {
+        *ptr = p + 1;
+        return true;
+    }
+    return false;
+}
+
+static bool parse_string_field(const char **ptr, const char *key, char *out, size_t max) {
+    if (!skip_key(ptr, key)) return false;
+    if (!skip_symbol(ptr, '"')) return false;
+
+    const char *p = *ptr;
+    size_t i = 0;
+
+    while (*p && *p != '"' && i < max - 1) {
+        if (*p == '\\' && *(p + 1)) p++; // skip escape
+        out[i++] = *p++;
+    }
+
+    if (*p != '"') return false;
+    out[i] = '\0';
+    *ptr = p + 1;
+    return true;
+}
+
+static bool parse_number_field(const char **ptr, const char *key, double *out_d, uint64_t *out_u64, int *out_i, uint32_t *out_u32) {
+    if (!skip_key(ptr, key)) return false;
+
+    char *end;
+    const char *p = *ptr;
+
+    while (isspace(*p)) p++;
+
+    if (out_d) {
+        *out_d = strtod(p, &end);
+    } else if (out_u64) {
+        *out_u64 = strtoull(p, &end, 10);
+    } else if (out_i) {
+        *out_i = strtol(p, &end, 10);
+    } else if (out_u32) {
+        *out_u32 = strtoul(p, &end, 10);
+    } else {
+        return false;
+    }
+
+    if (end == p) return false;
+    *ptr = end;
+    return true;
+}
 
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
     const uint32_t FNV_PRIME = 0x01000193;
@@ -172,35 +262,70 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
     FILE *fp = fopen(filepath, "rb");
     if (!fp) return 0;
 
-    // Optional: check file signature
-    char sig[4];
-    if (fread(sig, sizeof(char), 4, fp) != 4) {
+    fseek(fp, 0, SEEK_END);
+    long length = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    if (length <= 0 || (size_t)length > 1024 * 1024) {
         fclose(fp);
         return 0;
     }
-    if (sig[0] != 'J' || sig[1] != 'F' || sig[2] != 'S' || sig[3] != '1') {
+
+    char *buffer = malloc(length + 1);
+    if (!buffer) {
         fclose(fp);
+        return 0;
+    }
+
+    if (fread(buffer, 1, length, fp) != (size_t)length) {
+        free(buffer);
+        fclose(fp);
+        return 0;
+    }
+    buffer[length] = '\0';
+    fclose(fp);
+
+    const char *ptr = buffer;
+    if (!match_key_value(&ptr, "signature", "JFS1")) {
+        free(buffer);
+        return 0;
+    }
+
+    if (!skip_key(&ptr, "blocks") || !skip_symbol(&ptr, '[')) {
+        free(buffer);
         return 0;
     }
 
     size_t count = 0;
-    if (fread(&count, sizeof(size_t), 1, fp) != 1) {
-        fclose(fp);
-        return 0;
+    while (*ptr && *ptr != ']' && count < FOSSIL_JELLYFISH_MAX_MEM) {
+        fossil_jellyfish_block *b = &chain->memory[count];
+        memset(b, 0, sizeof(*b));
+
+        if (!skip_symbol(&ptr, '{')) break;
+        if (!parse_string_field(&ptr, "input", b->input, sizeof(b->input))) break;
+        if (!parse_string_field(&ptr, "output", b->output, sizeof(b->output))) break;
+        if (!parse_number_field(&ptr, "timestamp", NULL, &b->timestamp, NULL, NULL)) break;
+
+        double temp_conf = 0;
+        if (!parse_number_field(&ptr, "confidence", &temp_conf, NULL, NULL, NULL)) break;
+        b->confidence = (float)temp_conf;
+
+        if (!parse_number_field(&ptr, "usage_count", NULL, NULL, NULL, &b->usage_count)) break;
+        b->valid = 1;
+
+        if (!skip_symbol(&ptr, '}')) break;
+
+        skip_comma(&ptr);
+        ++count;
     }
 
-    if (count > FOSSIL_JELLYFISH_MAX_MEM) {
-        fclose(fp);
-        return 0;
-    }
-
-    if (fread(chain->memory, sizeof(fossil_jellyfish_block), count, fp) != count) {
-        fclose(fp);
+    if (!skip_symbol(&ptr, ']') || !skip_symbol(&ptr, '}')) {
+        free(buffer);
         return 0;
     }
 
     chain->count = count;
-    fclose(fp);
+    free(buffer);
     return 1;
 }
 
@@ -208,24 +333,42 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
     FILE *fp = fopen(filepath, "wb");
     if (!fp) return 0;
 
-    // Optional: write file signature
-    const char sig[4] = { 'J', 'F', 'S', '1' };
-    if (fwrite(sig, sizeof(char), 4, fp) != 4) {
-        fclose(fp);
-        return 0;
+    fprintf(fp, "{\n");
+    fprintf(fp, "  \"signature\": \"JFS1\",\n");
+    fprintf(fp, "  \"blocks\": [\n");
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+
+        char input_escaped[2 * FOSSIL_JELLYFISH_INPUT_SIZE] = {0};
+        char output_escaped[2 * FOSSIL_JELLYFISH_OUTPUT_SIZE] = {0};
+
+        char *dst = input_escaped;
+        for (const char *src = b->input; *src && (size_t)(dst - input_escaped) < sizeof(input_escaped) - 2; ++src) {
+            if (*src == '"' || *src == '\\') *dst++ = '\\';
+            *dst++ = *src;
+        }
+        *dst = '\0';
+
+        dst = output_escaped;
+        for (const char *src = b->output; *src && (size_t)(dst - output_escaped) < sizeof(output_escaped) - 2; ++src) {
+            if (*src == '"' || *src == '\\') *dst++ = '\\';
+            *dst++ = *src;
+        }
+        *dst = '\0';
+
+        fprintf(fp, "    {\n");
+        fprintf(fp, "      \"input\": \"%s\",\n", input_escaped);
+        fprintf(fp, "      \"output\": \"%s\",\n", output_escaped);
+        fprintf(fp, "      \"timestamp\": %" PRIu64 ",\n", b->timestamp);
+        fprintf(fp, "      \"confidence\": %.6f,\n", b->confidence);
+        fprintf(fp, "      \"usage_count\": %" PRIu32 "\n", b->usage_count);
+        fprintf(fp, "    }%s\n", (i < chain->count - 1) ? "," : "");
     }
 
-    if (fwrite(&chain->count, sizeof(size_t), 1, fp) != 1) {
-        fclose(fp);
-        return 0;
-    }
+    fprintf(fp, "  ]\n");
+    fprintf(fp, "}\n");
 
-    if (fwrite(chain->memory, sizeof(fossil_jellyfish_block), chain->count, fp) != chain->count) {
-        fclose(fp);
-        return 0;
-    }
-
-    fflush(fp);
     fclose(fp);
     return 1;
 }
@@ -428,4 +571,127 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
         printf("No confident memories yet.\n");
     }
     printf("================================\n");
+}
+
+static void strip_quotes(char *str) {
+    size_t len = strlen(str);
+    if (len >= 2 && (str[0] == '\'' || str[0] == '"') && str[len - 1] == str[0]) {
+        memmove(str, str + 1, len - 2);
+        str[len - 2] = '\0';
+    }
+}
+
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_mindset *out_mindsets, int max_mindsets) {
+    FILE *fp = fopen(filepath, "r");
+    if (!fp) return 0;
+
+    char line[512];
+    fossil_jellyfish_mindset *current = NULL;
+    int mindset_count = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        char *trim = line;
+        while (*trim && isspace(*trim)) trim++;
+
+        // Skip blank lines
+        if (*trim == '\0' || *trim == '\n') continue;
+
+        // Handle comments (lines starting with #, excluding logic tags)
+        if (*trim == '#' && trim[1] != ':') continue;
+
+        // Handle logic tags like #:taint-check or #:bootstrap
+        if (strncmp(trim, "#:", 2) == 0 && current) {
+            char tag[64] = {0};
+            sscanf(trim + 2, "%63s", tag);  // Skip "#:"
+            if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
+                strncpy(current->tags[current->tag_count++], tag, 63);
+            }
+            continue;
+        }
+
+        if (strncmp(trim, "mindset(", 8) == 0) {
+            if (mindset_count >= max_mindsets) break;
+            current = &out_mindsets[mindset_count++];
+            memset(current, 0, sizeof(fossil_jellyfish_mindset));
+
+            char *start = strchr(trim, '(') + 1;
+            char *end = strchr(start, ')');
+            if (start && end) {
+                *end = '\0';
+                strncpy(current->name, start, sizeof(current->name) - 1);
+                strip_quotes(current->name);
+            }
+        }
+        else if (current && strstr(trim, "description:")) {
+            sscanf(trim, "description: %[^\n]", current->description);
+            strip_quotes(current->description);
+        }
+        else if (current && strstr(trim, "priority:")) {
+            sscanf(trim, "priority: %d", &current->priority);
+        }
+        else if (current && strstr(trim, "confidence_threshold:")) {
+            sscanf(trim, "confidence_threshold: %f", &current->confidence_threshold);
+        }
+        else if (current && strstr(trim, "activation_condition:")) {
+            sscanf(trim, "activation_condition: %[^\n]", current->activation_condition);
+            strip_quotes(current->activation_condition);
+        }
+        else if (current && strstr(trim, "models: [")) {
+            char *p = strchr(trim, '[') + 1;
+            while (p && *p && *p != ']') {
+                char model[256] = {0};
+                sscanf(p, "%[^,\n]", model);
+                strip_quotes(model);
+                if (strlen(model) > 0 && current->model_count < FOSSIL_JELLYFISH_MAX_MODEL_FILES) {
+                    strncpy(current->model_files[current->model_count++], model, 255);
+                }
+                p = strchr(p, ',');
+                if (p) p++;
+            }
+        }
+        else if (current && strstr(trim, "tags: [")) {
+            char *p = strchr(trim, '[') + 1;
+            while (p && *p && *p != ']') {
+                char tag[64] = {0};
+                sscanf(p, "%[^,\n]", tag);
+                strip_quotes(tag);
+                if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
+                    strncpy(current->tags[current->tag_count++], tag, 63);
+                }
+                p = strchr(p, ',');
+                if (p) p++;
+            }
+        }
+    }
+
+    fclose(fp);
+    return mindset_count;
+}
+
+int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset) {
+    if (strlen(mindset->name) == 0) return 0;
+    if (mindset->model_count == 0) return 0;
+    for (int i = 0; i < mindset->model_count; ++i) {
+        if (strstr(mindset->model_files[i], ".fish") == NULL) return 0;
+    }
+    return 1;
+}
+
+int fossil_jellyfish_load_mindset_file(const char *filepath, fossil_jellyfish_mind *mind) {
+    fossil_jellyfish_mindset sets[16];
+    int count = fossil_jellyfish_parse_jellyfish_file(filepath, sets, 16);
+    if (count <= 0) return 0;
+
+    for (int i = 0; i < count; ++i) {
+        if (!fossil_jellyfish_validate_mindset(&sets[i])) continue;
+        for (int j = 0; j < sets[i].model_count; ++j) {
+            if (mind->model_count >= FOSSIL_JELLYFISH_MAX_MODELS) break;
+            if (fossil_jellyfish_load(&mind->models[mind->model_count], sets[i].model_files[j]) == 0) {
+                strncpy(mind->model_names[mind->model_count], sets[i].model_files[j], 63);
+                mind->model_count++;
+            }
+        }
+    }
+
+    return 1;
 }

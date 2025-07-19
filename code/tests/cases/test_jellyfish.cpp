@@ -128,13 +128,14 @@ FOSSIL_TEST_CASE(cpp_test_jellyfishai_save_and_load) {
     ai.learn("cat", "meow");
     ai.learn("dog", "bark");
 
-    const std::string filepath = "jellyfish_chain_test_save.dat";
+    const std::string filepath = "jellyfish_chain_test_save.fish";
+
     int save_result = ai.save(filepath);
-    ASSUME_ITS_EQUAL_I32(save_result, 0);
+    ASSUME_ITS_EQUAL_I32(save_result, 1);  // Expect 1 on success now
 
     JellyfishAI ai2;
     int load_result = ai2.load(filepath);
-    ASSUME_ITS_EQUAL_I32(load_result, 0);
+    ASSUME_ITS_EQUAL_I32(load_result, 1);  // Expect 1 on success now
 
     // Check that loaded data matches
     std::string out1 = ai2.reason("cat");

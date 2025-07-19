@@ -16,14 +16,19 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
-#define FOSSIL_JELLYFISH_MAX_MEM 128
-#define FOSSIL_JELLYFISH_HASH_SIZE 32
-#define FOSSIL_JELLYFISH_INPUT_SIZE 64
-#define FOSSIL_JELLYFISH_OUTPUT_SIZE 64
-#define FOSSIL_JELLYFISH_MAX_MODELS 32
-#define FOSSIL_JELLYFISH_MAX_TOKENS 16
-#define FOSSIL_JELLYFISH_TOKEN_SIZE 16
+enum {
+    FOSSIL_JELLYFISH_MAX_MEM          = 128,
+    FOSSIL_JELLYFISH_HASH_SIZE        = 32,
+    FOSSIL_JELLYFISH_INPUT_SIZE       = 64,
+    FOSSIL_JELLYFISH_OUTPUT_SIZE      = 64,
+    FOSSIL_JELLYFISH_MAX_MODELS       = 32,
+    FOSSIL_JELLYFISH_MAX_TOKENS       = 16,
+    FOSSIL_JELLYFISH_TOKEN_SIZE       = 16,
+    FOSSIL_JELLYFISH_MAX_MODEL_FILES  = 16,
+    FOSSIL_JELLYFISH_MAX_TAGS         = 8
+};
 
 #ifdef __cplusplus
 extern "C"
@@ -48,7 +53,6 @@ typedef struct {
     uint32_t usage_count; // New: how often it's used
 } fossil_jellyfish_block;
 
-
 /**
  * Represents a chain of jellyfish blocks.
  * This structure holds the memory for the jellyfish AI and tracks the number of blocks.
@@ -57,6 +61,18 @@ typedef struct {
     fossil_jellyfish_block memory[FOSSIL_JELLYFISH_MAX_MEM];
     size_t count;
 } fossil_jellyfish_chain;
+
+typedef struct {
+    char name[64];
+    char description[256];
+    char model_files[FOSSIL_JELLYFISH_MAX_MODEL_FILES][256];
+    int model_count;
+    float confidence_threshold;
+    int priority;
+    char activation_condition[256];
+    char tags[FOSSIL_JELLYFISH_MAX_TAGS][64];
+    int tag_count;
+} fossil_jellyfish_mindset;
 
 typedef struct {
     fossil_jellyfish_chain models[FOSSIL_JELLYFISH_MAX_MODELS];
@@ -235,6 +251,34 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
  * @param chain  Pointer to the memory chain to reflect on.
  */
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
+
+/**
+ * Parses a .jellyfish file and extracts all mindset blocks.
+ * 
+ * @param filepath       Path to the .jellyfish file.
+ * @param out_mindsets   Array to store parsed mindsets.
+ * @param max_mindsets   Maximum number of mindsets to store.
+ * @return               Number of mindsets parsed, or 0 on failure.
+ */
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_mindset *out_mindsets, int max_mindsets);
+
+/**
+ * Validates a given mindset for correctness.
+ * 
+ * @param mindset   Pointer to the mindset to validate.
+ * @return          1 if the mindset is valid, 0 if invalid.
+ */
+int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset);
+
+/**
+ * Loads all valid .fish model files referenced in a .jellyfish file
+ * into a target fossil_jellyfish_mind structure.
+ * 
+ * @param filepath   Path to the .jellyfish DSL file.
+ * @param mind       Pointer to the mind structure to populate.
+ * @return           1 if loading was successful, 0 if an error occurred.
+ */
+int fossil_jellyfish_load_mindset_file(const char *filepath, fossil_jellyfish_mind *mind);
 
 #ifdef __cplusplus
 }
