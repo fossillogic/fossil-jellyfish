@@ -399,6 +399,88 @@ FOSSIL_TEST_CASE(c_test_load_mindset_file_missing_model) {
     remove(jelly_file);
 }
 
+FOSSIL_TEST_CASE(c_test_load_mindset_multiple_models) {
+    const char *model_a = "model_a.fish";
+    const char *model_b = "model_b.fish";
+
+    fossil_jellyfish_chain a = {0}, b = {0};
+    fossil_jellyfish_init(&a);
+    fossil_jellyfish_init(&b);
+
+    fossil_jellyfish_learn(&a, "red", "color");
+    fossil_jellyfish_learn(&b, "triangle", "shape");
+
+    fossil_jellyfish_save(&a, model_a);
+    fossil_jellyfish_save(&b, model_b);
+
+    const char *jelly_file = "complex_mindset.jellyfish";
+    FILE *f = fopen(jelly_file, "w");
+    fprintf(f,
+        "{\n"
+        "  \"signature\": \"JFS1\",\n"
+        "  \"blocks\": [\n"
+        "    { \"input\": \"%s\", \"output\": \"visual\", \"timestamp\": 1 },\n"
+        "    { \"input\": \"%s\", \"output\": \"geometry\", \"timestamp\": 2 }\n"
+        "  ]\n"
+        "}\n", model_a, model_b);
+    fclose(f);
+
+    fossil_jellyfish_mind mind = {0};
+    int ok = fossil_jellyfish_load_mindset_file(jelly_file, &mind);
+
+    ASSUME_ITS_TRUE(ok == 1);
+    ASSUME_ITS_EQUAL_SIZE(mind.model_count, 2);
+
+    ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[0].input, "red");
+    ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[0].output, "color");
+
+    ASSUME_ITS_EQUAL_CSTR(mind.models[1].memory[0].input, "triangle");
+    ASSUME_ITS_EQUAL_CSTR(mind.models[1].memory[0].output, "shape");
+
+    remove(model_a);
+    remove(model_b);
+    remove(jelly_file);
+}
+
+FOSSIL_TEST_CASE(c_test_load_model_with_multiple_thoughts) {
+    const char *model_file = "multi_thoughts.fish";
+
+    fossil_jellyfish_chain chain = {0};
+    fossil_jellyfish_init(&chain);
+
+    fossil_jellyfish_learn(&chain, "day", "light");
+    fossil_jellyfish_learn(&chain, "night", "dark");
+    fossil_jellyfish_learn(&chain, "moon", "reflect");
+
+    fossil_jellyfish_save(&chain, model_file);
+
+    const char *jelly_file = "mind_multi_thoughts.jellyfish";
+    FILE *f = fopen(jelly_file, "w");
+    fprintf(f,
+        "{\n"
+        "  \"signature\": \"JFS1\",\n"
+        "  \"blocks\": [\n"
+        "    { \"input\": \"%s\", \"output\": \"cycle\", \"timestamp\": 123 }\n"
+        "  ]\n"
+        "}\n", model_file);
+    fclose(f);
+
+    fossil_jellyfish_mind mind = {0};
+    int ok = fossil_jellyfish_load_mindset_file(jelly_file, &mind);
+
+    ASSUME_ITS_TRUE(ok == 1);
+    ASSUME_ITS_EQUAL_SIZE(mind.model_count, 1);
+
+    // Multiple thoughts
+    ASSUME_ITS_EQUAL_SIZE(mind.models[0].size, 3);
+    ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[0].input, "day");
+    ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[1].input, "night");
+    ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[2].input, "moon");
+
+    remove(model_file);
+    remove(jelly_file);
+}
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -424,6 +506,8 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_parse_jellyfish_file_valid);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_load_mindset_file_valid);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_load_mindset_file_missing_model);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_load_mindset_multiple_models);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_load_model_with_multiple_thoughts);
 
     
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
