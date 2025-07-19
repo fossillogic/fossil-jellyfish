@@ -168,39 +168,154 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain *chain) {
     }
 }
 
+static bool match_key(const char **ptr, const char *key) {
+    while (**ptr && (**ptr == ' ' || **ptr == '\n' || **ptr == '\r' || **ptr == '\t')) (*ptr)++;
+    size_t len = strlen(key);
+    if (strncmp(*ptr, key, len) == 0) {
+        *ptr += len;
+        return true;
+    }
+    return false;
+}
+
+static void skip_whitespace(const char **ptr) {
+    while (**ptr && (**ptr == ' ' || **ptr == '\n' || **ptr == '\r' || **ptr == '\t')) (*ptr)++;
+}
+
+static bool parse_string(const char **ptr, char *out, size_t maxlen) {
+    skip_whitespace(ptr);
+    if (**ptr != '\"') return false;
+    (*ptr)++;
+    size_t i = 0;
+    while (**ptr && **ptr != '\"' && i < maxlen - 1) {
+        out[i++] = *(*ptr)++;
+    }
+    if (**ptr != '\"') return false;
+    (*ptr)++;
+    out[i] = '\0';
+    return true;
+}
+
+static bool parse_number(const char **ptr, double *out_double, long *out_long) {
+    skip_whitespace(ptr);
+    char buffer[64];
+    size_t i = 0;
+    while ((**ptr >= '0' && **ptr <= '9') || **ptr == '.' || **ptr == '-') {
+        if (i < sizeof(buffer) - 1)
+            buffer[i++] = *(*ptr)++;
+        else
+            return false;
+    }
+    buffer[i] = '\0';
+
+    if (strchr(buffer, '.')) {
+        if (out_double) *out_double = atof(buffer);
+    } else {
+        if (out_long) *out_long = atol(buffer);
+    }
+
+    return true;
+}
+
 int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
     FILE *fp = fopen(filepath, "rb");
     if (!fp) return 0;
 
-    // Optional: check file signature
-    char sig[4];
-    if (fread(sig, sizeof(char), 4, fp) != 4) {
+    fseek(fp, 0, SEEK_END);
+    long fsize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    char *data = malloc(fsize + 1);
+    if (!data) {
         fclose(fp);
         return 0;
     }
-    if (sig[0] != 'J' || sig[1] != 'F' || sig[2] != 'S' || sig[3] != '1') {
-        fclose(fp);
+
+    fread(data, 1, fsize, fp);
+    fclose(fp);
+    data[fsize] = '\0';
+
+    const char *ptr = data;
+    skip_whitespace(&ptr);
+
+    // Look for signature
+    if (!match_key(&ptr, "{\"signature\":")) {
+        free(data);
+        return 0;
+    }
+
+    char sig[8];
+    if (!parse_string(&ptr, sig, sizeof(sig)) || strcmp(sig, "JFS1") != 0) {
+        free(data);
+        return 0;
+    }
+
+    if (!match_key(&ptr, ",\"blocks\":[")) {
+        free(data);
         return 0;
     }
 
     size_t count = 0;
-    if (fread(&count, sizeof(size_t), 1, fp) != 1) {
-        fclose(fp);
-        return 0;
-    }
+    while (*ptr && *ptr != ']') {
+        if (count >= FOSSIL_JELLYFISH_MAX_MEM) break;
 
-    if (count > FOSSIL_JELLYFISH_MAX_MEM) {
-        fclose(fp);
-        return 0;
-    }
+        if (!match_key(&ptr, "{")) {
+            free(data);
+            return 0;
+        }
 
-    if (fread(chain->memory, sizeof(fossil_jellyfish_block), count, fp) != count) {
-        fclose(fp);
-        return 0;
+        fossil_jellyfish_block *block = &chain->memory[count];
+        memset(block, 0, sizeof(*block));
+
+        if (!match_key(&ptr, "\"input\":")) {
+            free(data);
+            return 0;
+        }
+        if (!parse_string(&ptr, block->input, sizeof(block->input))) {
+            free(data);
+            return 0;
+        }
+
+        if (!match_key(&ptr, ",\"output\":")) {
+            free(data);
+            return 0;
+        }
+        if (!parse_string(&ptr, block->output, sizeof(block->output))) {
+            free(data);
+            return 0;
+        }
+
+        if (!match_key(&ptr, ",\"timestamp\":")) {
+            free(data);
+            return 0;
+        }
+        if (!parse_number(&ptr, NULL, &block->timestamp)) {
+            free(data);
+            return 0;
+        }
+
+        if (!match_key(&ptr, ",\"confidence\":")) {
+            free(data);
+            return 0;
+        }
+        if (!parse_number(&ptr, &block->confidence, NULL)) {
+            free(data);
+            return 0;
+        }
+
+        if (!match_key(&ptr, "}")) {
+            free(data);
+            return 0;
+        }
+
+        count++;
+
+        skip_whitespace(&ptr);
+        if (*ptr == ',') ptr++;
     }
 
     chain->count = count;
-    fclose(fp);
+    free(data);
     return 1;
 }
 
@@ -208,24 +323,40 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
     FILE *fp = fopen(filepath, "wb");
     if (!fp) return 0;
 
-    // Optional: write file signature
-    const char sig[4] = { 'J', 'F', 'S', '1' };
-    if (fwrite(sig, sizeof(char), 4, fp) != 4) {
-        fclose(fp);
-        return 0;
+    fprintf(fp, "{\n");
+    fprintf(fp, "  \"signature\": \"JFS1\",\n");
+    fprintf(fp, "  \"blocks\": [\n");
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+
+        // Escape JSON strings (only for quote and backslash for simplicity)
+        char input_escaped[512] = {0}, output_escaped[512] = {0};
+        char *dst = input_escaped;
+        for (const char *src = block->input; *src && (dst - input_escaped) < sizeof(input_escaped) - 2; ++src) {
+            if (*src == '"' || *src == '\\') *dst++ = '\\';
+            *dst++ = *src;
+        }
+        *dst = '\0';
+
+        dst = output_escaped;
+        for (const char *src = block->output; *src && (dst - output_escaped) < sizeof(output_escaped) - 2; ++src) {
+            if (*src == '"' || *src == '\\') *dst++ = '\\';
+            *dst++ = *src;
+        }
+        *dst = '\0';
+
+        fprintf(fp, "    {\n");
+        fprintf(fp, "      \"input\": \"%s\",\n", input_escaped);
+        fprintf(fp, "      \"output\": \"%s\",\n", output_escaped);
+        fprintf(fp, "      \"timestamp\": %ld,\n", block->timestamp);
+        fprintf(fp, "      \"confidence\": %.6f\n", block->confidence);
+        fprintf(fp, "    }%s\n", (i < chain->count - 1) ? "," : "");
     }
 
-    if (fwrite(&chain->count, sizeof(size_t), 1, fp) != 1) {
-        fclose(fp);
-        return 0;
-    }
+    fprintf(fp, "  ]\n");
+    fprintf(fp, "}\n");
 
-    if (fwrite(chain->memory, sizeof(fossil_jellyfish_block), chain->count, fp) != chain->count) {
-        fclose(fp);
-        return 0;
-    }
-
-    fflush(fp);
     fclose(fp);
     return 1;
 }
