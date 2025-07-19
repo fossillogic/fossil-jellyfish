@@ -110,7 +110,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_save_and_load) {
     fossil_jellyfish_learn(&chain1, "alpha", "beta");
     fossil_jellyfish_learn(&chain1, "gamma", "delta");
 
-    const char *filepath = "test_jellyfish_chain_save.dat";
+    const char *filepath = "test_jellyfish_chain.fish";  // Updated to .fish extension
+
     int save_result = fossil_jellyfish_save(&chain1, filepath);
     ASSUME_ITS_TRUE(save_result == 1);
 
@@ -118,6 +119,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_save_and_load) {
     ASSUME_ITS_TRUE(load_result == 1);
 
     ASSUME_ITS_EQUAL_SIZE(chain2.count, 2);
+
     ASSUME_ITS_EQUAL_CSTR(chain2.memory[0].input, "alpha");
     ASSUME_ITS_EQUAL_CSTR(chain2.memory[0].output, "beta");
     ASSUME_ITS_EQUAL_CSTR(chain2.memory[1].input, "gamma");
