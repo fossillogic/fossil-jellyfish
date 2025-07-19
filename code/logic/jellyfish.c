@@ -349,7 +349,7 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
         fprintf(fp, "    {\n");
         fprintf(fp, "      \"input\": \"%s\",\n", input_escaped);
         fprintf(fp, "      \"output\": \"%s\",\n", output_escaped);
-        fprintf(fp, "      \"timestamp\": %ld,\n", block->timestamp);
+        fprintf(fp, "      \"timestamp\": %llu,\n", block->timestamp);
         fprintf(fp, "      \"confidence\": %.6f\n", block->confidence);
         fprintf(fp, "    }%s\n", (i < chain->count - 1) ? "," : "");
     }
