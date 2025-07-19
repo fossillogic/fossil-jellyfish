@@ -316,7 +316,7 @@ FOSSIL_TEST_CASE(c_test_parse_jellyfish_file_valid) {
         "  \"signature\": \"JFS1\",\n"
         "  \"blocks\": [\n"
         "    {\n"
-        "      \"input\": \"apple\",\n"
+        "      \"input\": \"apple.fish\",\n"
         "      \"output\": \"fruit\",\n"
         "      \"timestamp\": 12345678\n"
         "    }\n"
@@ -329,19 +329,22 @@ FOSSIL_TEST_CASE(c_test_parse_jellyfish_file_valid) {
     int count = fossil_jellyfish_parse_jellyfish_file(test_file, out, 4);
 
     ASSUME_ITS_EQUAL_SIZE(count, 1);
-    ASSUME_ITS_EQUAL_CSTR(out[0].chain.memory[0].input, "apple");
-    ASSUME_ITS_EQUAL_CSTR(out[0].chain.memory[0].output, "fruit");
+    ASSUME_ITS_EQUAL_CSTR(out[0].model_files[0], "apple.fish");
+    ASSUME_ITS_EQUAL_SIZE(out[0].model_count, 1);
 
     remove(test_file);
 }
 
 FOSSIL_TEST_CASE(c_test_load_mindset_file_valid) {
     const char *model_file = "test_model.fish";
+
+    // Save a test model to a file
     fossil_jellyfish_chain chain;
     fossil_jellyfish_init(&chain);
     fossil_jellyfish_learn(&chain, "sun", "star");
     fossil_jellyfish_save(&chain, model_file);
 
+    // Create mindset file referencing model
     const char *jelly_file = "test_valid.jellyfish";
     FILE *f = fopen(jelly_file, "w");
     fprintf(f,
@@ -357,6 +360,7 @@ FOSSIL_TEST_CASE(c_test_load_mindset_file_valid) {
         "}\n", model_file);
     fclose(f);
 
+    // Load mind from mindset file
     fossil_jellyfish_mind mind;
     memset(&mind, 0, sizeof(mind));
     int ok = fossil_jellyfish_load_mindset_file(jelly_file, &mind);
@@ -364,6 +368,7 @@ FOSSIL_TEST_CASE(c_test_load_mindset_file_valid) {
     ASSUME_ITS_TRUE(ok == 1);
     ASSUME_ITS_EQUAL_SIZE(mind.model_count, 1);
     ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[0].input, "sun");
+    ASSUME_ITS_EQUAL_CSTR(mind.models[0].memory[0].output, "star");
 
     remove(jelly_file);
     remove(model_file);
@@ -371,6 +376,7 @@ FOSSIL_TEST_CASE(c_test_load_mindset_file_valid) {
 
 FOSSIL_TEST_CASE(c_test_load_mindset_file_missing_model) {
     const char *jelly_file = "bad_model_ref.jellyfish";
+
     FILE *f = fopen(jelly_file, "w");
     fprintf(f,
         "{\n"
@@ -385,10 +391,10 @@ FOSSIL_TEST_CASE(c_test_load_mindset_file_missing_model) {
         "}\n");
     fclose(f);
 
-    fossil_jellyfish_mind mind;
-    memset(&mind, 0, sizeof(mind));
+    fossil_jellyfish_mind mind = {0};
     int ok = fossil_jellyfish_load_mindset_file(jelly_file, &mind);
-    ASSUME_ITS_TRUE(ok == 0);
+
+    ASSUME_ITS_TRUE(ok == 0);  // Should fail to load missing model
 
     remove(jelly_file);
 }
