@@ -326,14 +326,17 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
         char output_escaped[FOSSIL_JELLYFISH_OUTPUT_SIZE * 2] = {0};
 
         char *dst = input_escaped;
-        for (const char *src = b->input; *src && (dst - input_escaped) < sizeof(input_escaped) - 2; ++src) {
+        // Escape input
+        char *dst = input_escaped;
+        for (const char *src = b->input; *src && (size_t)(dst - input_escaped) < sizeof(input_escaped) - 2; ++src) {
             if (*src == '"' || *src == '\\') *dst++ = '\\';
             *dst++ = *src;
         }
         *dst = '\0';
-
+        
+        // Escape output
         dst = output_escaped;
-        for (const char *src = b->output; *src && (dst - output_escaped) < sizeof(output_escaped) - 2; ++src) {
+        for (const char *src = b->output; *src && (size_t)(dst - output_escaped) < sizeof(output_escaped) - 2; ++src) {
             if (*src == '"' || *src == '\\') *dst++ = '\\';
             *dst++ = *src;
         }
