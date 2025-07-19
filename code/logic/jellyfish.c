@@ -168,8 +168,12 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain *chain) {
     }
 }
 
+static void skip_whitespace(const char **ptr) {
+    while (isspace(**ptr)) (*ptr)++;
+}
+
 static bool match_key(const char **ptr, const char *key) {
-    while (**ptr && (**ptr == ' ' || **ptr == '\n' || **ptr == '\r' || **ptr == '\t')) (*ptr)++;
+    skip_whitespace(ptr);
     size_t len = strlen(key);
     if (strncmp(*ptr, key, len) == 0) {
         *ptr += len;
@@ -178,43 +182,48 @@ static bool match_key(const char **ptr, const char *key) {
     return false;
 }
 
-static void skip_whitespace(const char **ptr) {
-    while (**ptr && (**ptr == ' ' || **ptr == '\n' || **ptr == '\r' || **ptr == '\t')) (*ptr)++;
-}
-
 static bool parse_string(const char **ptr, char *out, size_t maxlen) {
     skip_whitespace(ptr);
-    if (**ptr != '\"') return false;
+    if (**ptr != '"') return false;
     (*ptr)++;
     size_t i = 0;
-    while (**ptr && **ptr != '\"' && i < maxlen - 1) {
+    while (**ptr && **ptr != '"' && i < maxlen - 1) {
+        if (**ptr == '\\') (*ptr)++; // Skip escape char
         out[i++] = *(*ptr)++;
     }
-    if (**ptr != '\"') return false;
+    if (**ptr != '"') return false;
     (*ptr)++;
     out[i] = '\0';
     return true;
 }
 
-static bool parse_number(const char **ptr, double *out_double, long *out_long) {
+static bool parse_hash(const char **ptr, uint8_t *hash_out) {
+    char hexstr[FOSSIL_JELLYFISH_HASH_SIZE * 2 + 1] = {0};
+    if (!parse_string(ptr, hexstr, sizeof(hexstr))) return false;
+
+    if (strlen(hexstr) != FOSSIL_JELLYFISH_HASH_SIZE * 2) return false;
+
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
+        char byte[3] = { hexstr[i * 2], hexstr[i * 2 + 1], 0 };
+        hash_out[i] = (uint8_t)strtoul(byte, NULL, 16);
+    }
+    return true;
+}
+
+static bool parse_number(const char **ptr, double *out_d, uint64_t *out_u64, int *out_i, uint32_t *out_u32) {
     skip_whitespace(ptr);
     char buffer[64];
     size_t i = 0;
-    while ((**ptr >= '0' && **ptr <= '9') || **ptr == '.' || **ptr == '-') {
-        if (i < sizeof(buffer) - 1)
-            buffer[i++] = *(*ptr)++;
-        else
-            return false;
-    }
+    while ((isdigit(**ptr) || **ptr == '.' || **ptr == '-') && i < sizeof(buffer) - 1)
+        buffer[i++] = *(*ptr)++;
     buffer[i] = '\0';
 
-    if (strchr(buffer, '.')) {
-        if (out_double) *out_double = atof(buffer);
-    } else {
-        if (out_long) *out_long = atol(buffer);
-    }
+    if (out_d) *out_d = atof(buffer);
+    if (out_u64) *out_u64 = strtoull(buffer, NULL, 10);
+    if (out_i) *out_i = atoi(buffer);
+    if (out_u32) *out_u32 = (uint32_t)strtoul(buffer, NULL, 10);
 
-    return true;
+    return i > 0;
 }
 
 int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
@@ -232,17 +241,13 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
     }
 
     fread(data, 1, fsize, fp);
-    fclose(fp);
     data[fsize] = '\0';
+    fclose(fp);
 
     const char *ptr = data;
     skip_whitespace(&ptr);
 
-    // Look for signature
-    if (!match_key(&ptr, "{\"signature\":")) {
-        free(data);
-        return 0;
-    }
+    if (!match_key(&ptr, "{\"signature\":")) { free(data); return 0; }
 
     char sig[8];
     if (!parse_string(&ptr, sig, sizeof(sig)) || strcmp(sig, "JFS1") != 0) {
@@ -250,113 +255,107 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
         return 0;
     }
 
-    if (!match_key(&ptr, ",\"blocks\":[")) {
-        free(data);
-        return 0;
-    }
+    if (!match_key(&ptr, ",\"blocks\":[")) { free(data); return 0; }
 
     size_t count = 0;
+    bool ok = true;
+
     while (*ptr && *ptr != ']') {
         if (count >= FOSSIL_JELLYFISH_MAX_MEM) break;
 
-        if (!match_key(&ptr, "{")) {
-            free(data);
-            return 0;
-        }
+        fossil_jellyfish_block *b = &chain->memory[count];
+        memset(b, 0, sizeof(*b));
 
-        fossil_jellyfish_block *block = &chain->memory[count];
-        memset(block, 0, sizeof(*block));
+        if (!match_key(&ptr, "{")) { ok = false; break; }
 
-        if (!match_key(&ptr, "\"input\":")) {
-            free(data);
-            return 0;
-        }
-        if (!parse_string(&ptr, block->input, sizeof(block->input))) {
-            free(data);
-            return 0;
-        }
+        if (!match_key(&ptr, "\"input\":")) { ok = false; break; }
+        if (!parse_string(&ptr, b->input, sizeof(b->input))) { ok = false; break; }
 
-        if (!match_key(&ptr, ",\"output\":")) {
-            free(data);
-            return 0;
-        }
-        if (!parse_string(&ptr, block->output, sizeof(block->output))) {
-            free(data);
-            return 0;
-        }
+        if (!match_key(&ptr, ",\"output\":")) { ok = false; break; }
+        if (!parse_string(&ptr, b->output, sizeof(b->output))) { ok = false; break; }
 
-        if (!match_key(&ptr, ",\"timestamp\":")) {
-            free(data);
-            return 0;
-        }
-        if (!parse_number(&ptr, NULL, &block->timestamp)) {
-            free(data);
-            return 0;
-        }
+        if (!match_key(&ptr, ",\"hash\":")) { ok = false; break; }
+        if (!parse_hash(&ptr, b->hash)) { ok = false; break; }
 
-        if (!match_key(&ptr, ",\"confidence\":")) {
-            free(data);
-            return 0;
-        }
-        if (!parse_number(&ptr, &block->confidence, NULL)) {
-            free(data);
-            return 0;
-        }
+        if (!match_key(&ptr, ",\"timestamp\":")) { ok = false; break; }
+        if (!parse_number(&ptr, NULL, &b->timestamp, NULL, NULL)) { ok = false; break; }
 
-        if (!match_key(&ptr, "}")) {
-            free(data);
-            return 0;
-        }
+        if (!match_key(&ptr, ",\"valid\":")) { ok = false; break; }
+        if (!parse_number(&ptr, NULL, NULL, &b->valid, NULL)) { ok = false; break; }
+
+        if (!match_key(&ptr, ",\"confidence\":")) { ok = false; break; }
+        if (!parse_number(&ptr, &b->confidence, NULL, NULL, NULL)) { ok = false; break; }
+
+        if (!match_key(&ptr, ",\"usage_count\":")) { ok = false; break; }
+        if (!parse_number(&ptr, NULL, NULL, NULL, &b->usage_count)) { ok = false; break; }
+
+        if (!match_key(&ptr, "}")) { ok = false; break; }
 
         count++;
-
         skip_whitespace(&ptr);
         if (*ptr == ',') ptr++;
     }
 
-    chain->count = count;
     free(data);
-    return 1;
+    chain->count = ok ? count : 0;
+    return ok ? 1 : 0;
+}
+
+static void hex_encode(const uint8_t *hash, size_t len, char *out, size_t out_size) {
+    const char *hex = "0123456789abcdef";
+    if (out_size < len * 2 + 1) return;
+    for (size_t i = 0; i < len; ++i) {
+        out[i * 2]     = hex[(hash[i] >> 4) & 0xF];
+        out[i * 2 + 1] = hex[hash[i] & 0xF];
+    }
+    out[len * 2] = '\0';
 }
 
 int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filepath) {
     FILE *fp = fopen(filepath, "wb");
     if (!fp) return 0;
 
-    fprintf(fp, "{\n");
-    fprintf(fp, "  \"signature\": \"JFS1\",\n");
-    fprintf(fp, "  \"blocks\": [\n");
+    fprintf(fp, "{\n  \"signature\": \"JFS1\",\n  \"blocks\": [\n");
 
     for (size_t i = 0; i < chain->count; ++i) {
-        const fossil_jellyfish_block *block = &chain->memory[i];
+        const fossil_jellyfish_block *b = &chain->memory[i];
 
-        // Escape JSON strings (only for quote and backslash for simplicity)
-        char input_escaped[512] = {0}, output_escaped[512] = {0};
+        // Escape input/output strings (basic)
+        char input_escaped[FOSSIL_JELLYFISH_INPUT_SIZE * 2] = {0};
+        char output_escaped[FOSSIL_JELLYFISH_OUTPUT_SIZE * 2] = {0};
+
         char *dst = input_escaped;
-        for (const char *src = block->input; *src && (dst - input_escaped) < sizeof(input_escaped) - 2; ++src) {
+        for (const char *src = b->input; *src && (dst - input_escaped) < sizeof(input_escaped) - 2; ++src) {
             if (*src == '"' || *src == '\\') *dst++ = '\\';
             *dst++ = *src;
         }
         *dst = '\0';
 
         dst = output_escaped;
-        for (const char *src = block->output; *src && (dst - output_escaped) < sizeof(output_escaped) - 2; ++src) {
+        for (const char *src = b->output; *src && (dst - output_escaped) < sizeof(output_escaped) - 2; ++src) {
             if (*src == '"' || *src == '\\') *dst++ = '\\';
             *dst++ = *src;
         }
         *dst = '\0';
 
-        fprintf(fp, "    {\n");
-        fprintf(fp, "      \"input\": \"%s\",\n", input_escaped);
-        fprintf(fp, "      \"output\": \"%s\",\n", output_escaped);
-        fprintf(fp, "      \"timestamp\": %llu,\n", block->timestamp);
-        fprintf(fp, "      \"confidence\": %.6f\n", block->confidence);
-        fprintf(fp, "    }%s\n", (i < chain->count - 1) ? "," : "");
+        char hash_hex[FOSSIL_JELLYFISH_HASH_SIZE * 2 + 1];
+        hex_encode(b->hash, FOSSIL_JELLYFISH_HASH_SIZE, hash_hex, sizeof(hash_hex));
+
+        fprintf(fp,
+            "    {\n"
+            "      \"input\": \"%s\",\n"
+            "      \"output\": \"%s\",\n"
+            "      \"hash\": \"%s\",\n"
+            "      \"timestamp\": %" PRIu64 ",\n"
+            "      \"valid\": %d,\n"
+            "      \"confidence\": %.6f,\n"
+            "      \"usage_count\": %u\n"
+            "    }%s\n",
+            input_escaped, output_escaped, hash_hex, b->timestamp, b->valid, b->confidence, b->usage_count,
+            (i < chain->count - 1) ? "," : "");
     }
 
-    fprintf(fp, "  ]\n");
-    fprintf(fp, "}\n");
-
+    fprintf(fp, "  ]\n}\n");
     fclose(fp);
     return 1;
 }
