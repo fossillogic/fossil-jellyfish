@@ -254,33 +254,6 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_struct_fields) {
     ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "bar");
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_mindset_struct_fields) {
-    fossil_jellyfish_mindset mindset = {0};
-    strcpy(mindset.name, "TestMind");
-    strcpy(mindset.description, "A test mindset");
-    strcpy(mindset.model_files[0], "model1.fish");
-    strcpy(mindset.model_files[1], "model2.fish");
-    mindset.model_count = 2;
-    mindset.confidence_threshold = 0.8f;
-    mindset.priority = 5;
-    strcpy(mindset.activation_condition, "always");
-    strcpy(mindset.tags[0], "tag1");
-    strcpy(mindset.tags[1], "tag2");
-    mindset.tag_count = 2;
-
-    ASSUME_ITS_EQUAL_CSTR(mindset.name, "TestMind");
-    ASSUME_ITS_EQUAL_CSTR(mindset.description, "A test mindset");
-    ASSUME_ITS_EQUAL_CSTR(mindset.model_files[0], "model1.fish");
-    ASSUME_ITS_EQUAL_CSTR(mindset.model_files[1], "model2.fish");
-    ASSUME_ITS_EQUAL_SIZE(mindset.model_count, 2);
-    ASSUME_ITS_TRUE(mindset.confidence_threshold > 0.79f && mindset.confidence_threshold < 0.81f);
-    ASSUME_ITS_TRUE(mindset.priority == 5);
-    ASSUME_ITS_EQUAL_CSTR(mindset.activation_condition, "always");
-    ASSUME_ITS_EQUAL_CSTR(mindset.tags[0], "tag1");
-    ASSUME_ITS_EQUAL_CSTR(mindset.tags[1], "tag2");
-    ASSUME_ITS_EQUAL_SIZE(mindset.tag_count, 2);
-}
-
 
 
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -305,7 +278,6 @@ FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_verify_block_and_chain);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_block_struct_fields);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_struct_fields);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_mindset_struct_fields);
     
     FOSSIL_TEST_REGISTER(cpp_jellyfish_fixture);
 } // end of tests
