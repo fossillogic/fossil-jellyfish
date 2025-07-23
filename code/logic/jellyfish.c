@@ -115,7 +115,6 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
 
     size_t in_len = strlen(input);
     size_t out_len = strlen(output);
-    size_t total_len = in_len + out_len;
 
     // Primary input loop
     for (size_t i = 0; i < in_len; ++i) {
