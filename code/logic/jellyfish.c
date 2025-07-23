@@ -109,42 +109,49 @@ static bool parse_number_field(const char **ptr, const char *key, double *out_d,
 }
 
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
-    const uint32_t FNV_PRIME = 0x01000193;
-    uint32_t hash = 0x811c9dc5;
+    const uint64_t PRIME = 0x100000001b3ULL;
+    uint64_t state1 = 0xcbf29ce484222325ULL;
+    uint64_t state2 = 0x84222325cbf29ce4ULL;
+
     size_t in_len = strlen(input);
     size_t out_len = strlen(output);
+    size_t total_len = in_len + out_len;
 
-    // Mix in lengths
-    hash ^= in_len;
-    hash *= FNV_PRIME;
-    hash ^= out_len;
-    hash *= FNV_PRIME;
-
-    // Mix input
+    // Primary input loop
     for (size_t i = 0; i < in_len; ++i) {
-        hash ^= (uint8_t)input[i];
-        hash *= FNV_PRIME;
-        hash ^= (hash >> 5);
+        state1 ^= (uint8_t)input[i];
+        state1 *= PRIME;
+        state1 ^= (state1 >> 27);
+        state1 ^= (state1 << 33);
     }
 
-    // Mix output
     for (size_t i = 0; i < out_len; ++i) {
-        hash ^= (uint8_t)output[i];
-        hash *= FNV_PRIME;
-        hash ^= (hash >> 5);
+        state2 ^= (uint8_t)output[i];
+        state2 *= PRIME;
+        state2 ^= (state2 >> 29);
+        state2 ^= (state2 << 31);
     }
 
-    // Final mix
-    hash ^= (hash << 7);
-    hash ^= (hash >> 3);
+    // Mix in lengths and constants
+    state1 ^= (uint64_t)in_len * 0x9e3779b97f4a7c15ULL;
+    state2 ^= (uint64_t)out_len * 0x94d049bb133111ebULL;
 
-    // Spread into output
-    uint32_t h = hash;
+    // Mixing rounds
+    for (int i = 0; i < 6; ++i) {
+        state1 += (state2 ^ (state1 >> 17));
+        state2 += (state1 ^ (state2 >> 13));
+        state1 ^= (state1 << 41);
+        state2 ^= (state2 << 37);
+        state1 *= PRIME;
+        state2 *= PRIME;
+    }
+
+    // Output spread: fill hash_out[]
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
-        h ^= (h >> 13);
-        h *= FNV_PRIME;
-        h ^= (h << 11);
-        hash_out[i] = (uint8_t)((h >> (8 * (i % 4))) & 0xFF);
+        uint64_t mixed = (i % 2 == 0) ? state1 : state2;
+        mixed ^= (mixed >> ((i % 7) + 13));
+        mixed *= PRIME;
+        hash_out[i] = (uint8_t)((mixed >> (8 * (i % 8))) & 0xFF);
     }
 }
 
