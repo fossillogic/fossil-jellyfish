@@ -673,14 +673,6 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
     printf("================================\n");
 }
 
-static void strip_quotes(char *str) {
-    size_t len = strlen(str);
-    if (len >= 2 && (str[0] == '\'' || str[0] == '"') && str[len - 1] == str[0]) {
-        memmove(str, str + 1, len - 2);
-        str[len - 2] = '\0';
-    }
-}
-
 bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block) {
     if (!block) return false;
 
