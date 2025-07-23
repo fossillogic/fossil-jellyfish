@@ -71,20 +71,21 @@ typedef struct {
 } fossil_jellyfish_chain;
 
 /**
- * Represents a mindset configuration for the jellyfish AI.
- * Contains metadata, model files, activation conditions, and tags.
+ * Represents a parsed JellyDSL structure for describing AI mindsets or knowledge.
+ * This structure can be used to hold parsed data from a .jellyfish (JellyDSL) file.
+ * Suitable for use in Truth Intelligence (TI) or Artificial Intelligence (AI) modules.
  */
 typedef struct {
-    char name[64];
-    char description[256];
-    char model_files[FOSSIL_JELLYFISH_MAX_MODEL_FILES][256];
-    int model_count;
-    float confidence_threshold;
-    int priority;
-    char activation_condition[256];
-    char tags[FOSSIL_JELLYFISH_MAX_TAGS][64];
-    int tag_count;
-} fossil_jellyfish_mindset;
+    char name[64];                                      // Name of the mindset or knowledge set
+    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Tags for categorization
+    size_t tag_count;                                   // Number of tags used
+    char description[256];                              // Optional description or notes
+    fossil_jellyfish_chain chain;                       // Associated memory chain
+    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // List of models associated with this mindset
+    int priority;                                       // Priority level for processing
+    float confidence_threshold;                        // Confidence threshold for decisions
+    int model_count;                                     // Number of models in this mindset
+} fossil_jellyfish_jellydsl;
 
 // *****************************************************************************
 // Function prototypes
@@ -218,24 +219,6 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
 
 /**
- * Parses a .jellyfish file and extracts all mindset blocks.
- * 
- * @param filepath       Path to the .jellyfish file.
- * @param out_mindsets   Array to store parsed mindsets.
- * @param max_mindsets   Maximum number of mindsets to store.
- * @return               Number of mindsets parsed, or 0 on failure.
- */
-int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_mindset *out_mindsets, int max_mindsets);
-
-/**
- * Validates a given mindset for correctness.
- * 
- * @param mindset   Pointer to the mindset to validate.
- * @return          1 if the mindset is valid, 0 if invalid.
- */
-int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset);
-
-/**
  * Verifies the integrity of a jellyfish block.
  * This checks if the block has valid input, output, and hash.
  * 
@@ -252,6 +235,16 @@ bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block);
  * @return True if the chain is valid, false otherwise.
  */
 bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain);
+
+/**
+ * Parses a .jellyfish file and extracts mindsets.
+ * 
+ * @param filepath       Path to the .jellyfish file.
+ * @param out_mindsets   Array to store parsed mindsets.
+ * @param max_mindsets   Maximum number of mindsets to store.
+ * @return               Number of mindsets parsed, or 0 on failure.
+ */
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_chains);
 
 #ifdef __cplusplus
 }

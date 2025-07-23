@@ -347,15 +347,6 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
         if (!skip_symbol(&ptr, '{')) break;
         if (!parse_string_field(&ptr, "input", b->input, sizeof(b->input))) break;
         if (!parse_string_field(&ptr, "output", b->output, sizeof(b->output))) break;
-        if (!parse_number_field(&ptr, "timestamp", NULL, &b->timestamp, NULL, NULL)) break;
-        if (!parse_number_field(&ptr, "delta_ms", NULL, NULL, NULL, &b->delta_ms)) break;
-        if (!parse_number_field(&ptr, "duration_ms", NULL, NULL, NULL, &b->duration_ms)) break;
-
-        double temp_conf = 0;
-        if (!parse_number_field(&ptr, "confidence", &temp_conf, NULL, NULL, NULL)) break;
-        b->confidence = (float)temp_conf;
-
-        if (!parse_number_field(&ptr, "usage_count", NULL, NULL, NULL, &b->usage_count)) break;
 
         // Parse hash as hex string
         if (!skip_key(&ptr, "hash") || !skip_symbol(&ptr, '"')) break;
@@ -366,6 +357,17 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
             ptr += 2;
         }
         if (!skip_symbol(&ptr, '"')) break;
+
+        if (!parse_number_field(&ptr, "timestamp", NULL, &b->timestamp, NULL, NULL)) break;
+        if (!parse_number_field(&ptr, "delta_ms", NULL, NULL, NULL, &b->delta_ms)) break;
+        if (!parse_number_field(&ptr, "duration_ms", NULL, NULL, NULL, &b->duration_ms)) break;
+        if (!parse_number_field(&ptr, "valid", NULL, NULL, &b->valid, NULL)) break;
+
+        double temp_conf = 0;
+        if (!parse_number_field(&ptr, "confidence", &temp_conf, NULL, NULL, NULL)) break;
+        b->confidence = (float)temp_conf;
+
+        if (!parse_number_field(&ptr, "usage_count", NULL, NULL, NULL, &b->usage_count)) break;
 
         // Parse device_id as hex string
         if (!skip_key(&ptr, "device_id") || !skip_symbol(&ptr, '"')) break;
@@ -386,8 +388,6 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
             ptr += 2;
         }
         if (!skip_symbol(&ptr, '"')) break;
-
-        b->valid = 1;
 
         if (!skip_symbol(&ptr, '}')) break;
 
@@ -436,18 +436,17 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
         fprintf(fp, "    {\n");
         fprintf(fp, "      \"input\": \"%s\",\n", input_escaped);
         fprintf(fp, "      \"output\": \"%s\",\n", output_escaped);
-        fprintf(fp, "      \"timestamp\": %" PRIu64 ",\n", b->timestamp);
-        fprintf(fp, "      \"delta_ms\": %" PRIu32 ",\n", b->delta_ms);
-        fprintf(fp, "      \"duration_ms\": %" PRIu32 ",\n", b->duration_ms);
-        fprintf(fp, "      \"confidence\": %.6f,\n", b->confidence);
-        fprintf(fp, "      \"usage_count\": %" PRIu32 ",\n", b->usage_count);
-
-        // Write hash as hex string
         fprintf(fp, "      \"hash\": \"");
         for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j) {
             fprintf(fp, "%02x", b->hash[j]);
         }
         fprintf(fp, "\",\n");
+        fprintf(fp, "      \"timestamp\": %" PRIu64 ",\n", b->timestamp);
+        fprintf(fp, "      \"delta_ms\": %" PRIu32 ",\n", b->delta_ms);
+        fprintf(fp, "      \"duration_ms\": %" PRIu32 ",\n", b->duration_ms);
+        fprintf(fp, "      \"valid\": %d,\n", b->valid);
+        fprintf(fp, "      \"confidence\": %.6f,\n", b->confidence);
+        fprintf(fp, "      \"usage_count\": %" PRIu32 ",\n", b->usage_count);
 
         // Write device_id as hex string
         fprintf(fp, "      \"device_id\": \"");
@@ -682,102 +681,6 @@ static void strip_quotes(char *str) {
     }
 }
 
-int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_mindset *out_mindsets, int max_mindsets) {
-    FILE *fp = fopen(filepath, "r");
-    if (!fp) return 0;
-
-    char line[512];
-    fossil_jellyfish_mindset *current = NULL;
-    int mindset_count = 0;
-
-    while (fgets(line, sizeof(line), fp)) {
-        char *trim = line;
-        while (*trim && isspace(*trim)) trim++;
-
-        // Skip blank lines
-        if (*trim == '\0' || *trim == '\n') continue;
-
-        // Handle comments (lines starting with #, excluding logic tags)
-        if (*trim == '#' && trim[1] != ':') continue;
-
-        // Handle logic tags like #:taint-check or #:bootstrap
-        if (strncmp(trim, "#:", 2) == 0 && current) {
-            char tag[64] = {0};
-            sscanf(trim + 2, "%63s", tag);  // Skip "#:"
-            if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
-                strncpy(current->tags[current->tag_count++], tag, 63);
-            }
-            continue;
-        }
-
-        if (strncmp(trim, "mindset(", 8) == 0) {
-            if (mindset_count >= max_mindsets) break;
-            current = &out_mindsets[mindset_count++];
-            memset(current, 0, sizeof(fossil_jellyfish_mindset));
-
-            char *start = strchr(trim, '(') + 1;
-            char *end = strchr(start, ')');
-            if (start && end) {
-                *end = '\0';
-                strncpy(current->name, start, sizeof(current->name) - 1);
-                strip_quotes(current->name);
-            }
-        }
-        else if (current && strstr(trim, "description:")) {
-            sscanf(trim, "description: %[^\n]", current->description);
-            strip_quotes(current->description);
-        }
-        else if (current && strstr(trim, "priority:")) {
-            sscanf(trim, "priority: %d", &current->priority);
-        }
-        else if (current && strstr(trim, "confidence_threshold:")) {
-            sscanf(trim, "confidence_threshold: %f", &current->confidence_threshold);
-        }
-        else if (current && strstr(trim, "activation_condition:")) {
-            sscanf(trim, "activation_condition: %[^\n]", current->activation_condition);
-            strip_quotes(current->activation_condition);
-        }
-        else if (current && strstr(trim, "models: [")) {
-            char *p = strchr(trim, '[') + 1;
-            while (p && *p && *p != ']') {
-                char model[256] = {0};
-                sscanf(p, "%[^,\n]", model);
-                strip_quotes(model);
-                if (strlen(model) > 0 && current->model_count < FOSSIL_JELLYFISH_MAX_MODEL_FILES) {
-                    strncpy(current->model_files[current->model_count++], model, 255);
-                }
-                p = strchr(p, ',');
-                if (p) p++;
-            }
-        }
-        else if (current && strstr(trim, "tags: [")) {
-            char *p = strchr(trim, '[') + 1;
-            while (p && *p && *p != ']') {
-                char tag[64] = {0};
-                sscanf(p, "%[^,\n]", tag);
-                strip_quotes(tag);
-                if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
-                    strncpy(current->tags[current->tag_count++], tag, 63);
-                }
-                p = strchr(p, ',');
-                if (p) p++;
-            }
-        }
-    }
-
-    fclose(fp);
-    return mindset_count;
-}
-
-int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset) {
-    if (strlen(mindset->name) == 0) return 0;
-    if (mindset->model_count == 0) return 0;
-    for (int i = 0; i < mindset->model_count; ++i) {
-        if (strstr(mindset->model_files[i], ".fish") == NULL) return 0;
-    }
-    return 1;
-}
-
 bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block) {
     if (!block) return false;
 
@@ -802,4 +705,113 @@ bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain) {
     }
 
     return true;
+}
+
+/**
+ * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts mindsets.
+ *
+ * @param filepath       Path to the .jellyfish file.
+ * @param out_mindsets   Array to store parsed mindsets.
+ * @param max_mindsets   Maximum number of mindsets to store.
+ * @return               Number of mindsets parsed, or 0 on failure.
+ */
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_mindsets) {
+    if (!filepath || !out || max_mindsets <= 0) return 0;
+
+    FILE *fp = fopen(filepath, "r");
+    if (!fp) return 0;
+
+    char line[1024];
+    int mindset_count = 0;
+    fossil_jellyfish_jellydsl *current = NULL;
+    int in_mindset = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        char *trim = line;
+        while (isspace(*trim)) ++trim;
+        size_t len = strlen(trim);
+        while (len > 0 && (trim[len-1] == '\n' || trim[len-1] == '\r')) trim[--len] = 0;
+
+        if (strncmp(trim, "mindset(", 8) == 0) {
+            if (mindset_count >= max_mindsets) break;
+            current = &out[mindset_count++];
+            memset(current, 0, sizeof(*current));
+            char *start = strchr(trim, '\'');
+            char *end = start ? strchr(start+1, '\'') : NULL;
+            if (start && end && (end - start - 1) < sizeof(current->name)) {
+                strncpy(current->name, start+1, end-start-1);
+                current->name[end-start-1] = 0;
+            }
+            in_mindset = 1;
+            continue;
+        }
+        if (!in_mindset || !current) continue;
+
+        if (strchr(trim, '}')) {
+            in_mindset = 0;
+            continue;
+        }
+
+        if (strncmp(trim, "description:", 12) == 0) {
+            char *desc = trim + 12;
+            while (isspace(*desc)) ++desc;
+            if (*desc == '\'') ++desc;
+            char *end = strrchr(desc, '\'');
+            if (end) *end = 0;
+            strncpy(current->description, desc, sizeof(current->description)-1);
+            continue;
+        }
+
+        if (strncmp(trim, "tags:", 5) == 0) {
+            char *tags = strchr(trim, '[');
+            if (tags) {
+                tags++;
+                char *tok = strtok(tags, ",]");
+                while (tok && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
+                    while (*tok && (isspace(*tok) || *tok == '\'' || *tok == '"')) ++tok;
+                    char *end = tok + strlen(tok) - 1;
+                    while (end > tok && (*end == '\'' || *end == '"' || isspace(*end))) *end-- = 0;
+                    strncpy(current->tags[current->tag_count++], tok, 31);
+                    tok = strtok(NULL, ",]");
+                }
+            }
+            continue;
+        }
+
+        if (strncmp(trim, "models:", 7) == 0) {
+            // Parse models as a list of strings (if you add to struct)
+            char *models = strchr(trim, '[');
+            if (models && current->model_count < FOSSIL_JELLYFISH_MAX_MODELS) {
+            models++;
+            char *tok = strtok(models, ",]");
+            while (tok && current->model_count < FOSSIL_JELLYFISH_MAX_MODELS) {
+                while (*tok && (isspace(*tok) || *tok == '\'' || *tok == '"')) ++tok;
+                char *end = tok + strlen(tok) - 1;
+                while (end > tok && (*end == '\'' || *end == '"' || isspace(*end))) *end-- = 0;
+                strncpy(current->models[current->model_count++], tok, 31);
+                tok = strtok(NULL, ",]");
+            }
+            }
+            continue;
+        }
+
+        if (strncmp(trim, "priority:", 9) == 0) {
+            char *prio = trim + 9;
+            while (isspace(*prio)) ++prio;
+            current->priority = atoi(prio);
+            continue;
+        }
+
+        if (strncmp(trim, "confidence_threshold:", 20) == 0) {
+            char *conf = trim + 20;
+            while (isspace(*conf)) ++conf;
+            current->confidence_threshold = (float)atof(conf);
+            continue;
+        }
+
+        // Ignore comments and unknown lines
+    }
+
+    fclose(fp);
+    return mindset_count;
 }
