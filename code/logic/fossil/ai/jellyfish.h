@@ -30,6 +30,9 @@ enum {
     FOSSIL_JELLYFISH_MAX_TAGS         = 8
 };
 
+#define FOSSIL_DEVICE_ID_SIZE      16   // E.g., 128-bit hardware ID
+#define FOSSIL_SIGNATURE_SIZE      64   // ECDSA, ED25519, etc.
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -47,10 +50,15 @@ typedef struct {
     char input[FOSSIL_JELLYFISH_INPUT_SIZE];
     char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];
     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];
-    uint64_t timestamp;
+    uint64_t timestamp;               // Absolute UNIX timestamp
+    uint32_t delta_ms;                // New: time since last block in ms
+    uint32_t duration_ms;             // New: time taken to process this block
     int valid;
-    float confidence;   // New: how trusted this block is (0.0 - 1.0)
-    uint32_t usage_count; // New: how often it's used
+    float confidence;
+    uint32_t usage_count;
+
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];
+    uint8_t signature[FOSSIL_SIGNATURE_SIZE];
 } fossil_jellyfish_block;
 
 /**
@@ -279,6 +287,10 @@ int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset);
  * @return           1 if loading was successful, 0 if an error occurred.
  */
 int fossil_jellyfish_load_mindset_file(const char *filepath, fossil_jellyfish_mind *mind);
+
+bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block);
+
+bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain);
 
 #ifdef __cplusplus
 }
