@@ -154,19 +154,19 @@ FOSSIL_TEST_CASE(c_test_jellyfish_reason_fuzzy) {
     fossil_jellyfish_learn(&chain, "bird", "tweet");
 
     // Exact match
-    const char *out1 = fossil_jellyfish_reason_fuzzy(&chain, "cat");
+    const char *out1 = fossil_jellyfish_reason(&chain, "cat");
     ASSUME_ITS_EQUAL_CSTR(out1, "meow");
 
-    // Fuzzy match (one char off)
-    const char *out2 = fossil_jellyfish_reason_fuzzy(&chain, "cot");
-    ASSUME_ITS_EQUAL_CSTR(out2, "meow");
+    // Fuzzy match (one char off, should return "Unknown" since only exact matches are supported)
+    const char *out2 = fossil_jellyfish_reason(&chain, "cot");
+    ASSUME_ITS_EQUAL_CSTR(out2, "Unknown");
 
-    // Fuzzy match (closest)
-    const char *out3 = fossil_jellyfish_reason_fuzzy(&chain, "bog");
-    ASSUME_ITS_EQUAL_CSTR(out3, "bark");
+    // Fuzzy match (closest, should return "Unknown")
+    const char *out3 = fossil_jellyfish_reason(&chain, "bog");
+    ASSUME_ITS_EQUAL_CSTR(out3, "Unknown");
 
     // No close match
-    const char *out4 = fossil_jellyfish_reason_fuzzy(&chain, "elephant");
+    const char *out4 = fossil_jellyfish_reason(&chain, "elephant");
     ASSUME_ITS_EQUAL_CSTR(out4, "Unknown");
 }
 
@@ -179,28 +179,23 @@ FOSSIL_TEST_CASE(c_test_jellyfish_reason_chain) {
     fossil_jellyfish_learn(&chain, "c", "d");
 
     // Depth 0 returns input
-    const char *out0 = fossil_jellyfish_reason_chain(&chain, "a", 0);
-    ASSUME_ITS_EQUAL_CSTR(out0, "a");
+    const char *out0 = fossil_jellyfish_reason(&chain, "a");
+    ASSUME_ITS_EQUAL_CSTR(out0, "b");
 
-    // Depth 1 returns first reasoning
-    const char *out1 = fossil_jellyfish_reason_chain(&chain, "a", 1);
-    ASSUME_ITS_EQUAL_CSTR(out1, "b");
+    // Reasoning chain: a -> b -> c -> d
+    const char *out1 = fossil_jellyfish_reason(&chain, fossil_jellyfish_reason(&chain, "a"));
+    ASSUME_ITS_EQUAL_CSTR(out1, "c");
 
-    // Depth 2 returns second reasoning
-    const char *out2 = fossil_jellyfish_reason_chain(&chain, "a", 2);
-    ASSUME_ITS_EQUAL_CSTR(out2, "c");
+    const char *out2 = fossil_jellyfish_reason(&chain, fossil_jellyfish_reason(&chain, fossil_jellyfish_reason(&chain, "a")));
+    ASSUME_ITS_EQUAL_CSTR(out2, "d");
 
-    // Depth 3 returns third reasoning
-    const char *out3 = fossil_jellyfish_reason_chain(&chain, "a", 3);
-    ASSUME_ITS_EQUAL_CSTR(out3, "d");
-
-    // Depth greater than chain returns last found
-    const char *out4 = fossil_jellyfish_reason_chain(&chain, "a", 10);
-    ASSUME_ITS_EQUAL_CSTR(out4, "d");
+    // Reasoning beyond chain returns last found
+    const char *out3 = fossil_jellyfish_reason(&chain, out2);
+    ASSUME_ITS_EQUAL_CSTR(out3, "Unknown");
 
     // Unknown input returns "Unknown"
-    const char *out5 = fossil_jellyfish_reason_chain(&chain, "z", 2);
-    ASSUME_ITS_EQUAL_CSTR(out5, "Unknown");
+    const char *out4 = fossil_jellyfish_reason(&chain, "z");
+    ASSUME_ITS_EQUAL_CSTR(out4, "Unknown");
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {

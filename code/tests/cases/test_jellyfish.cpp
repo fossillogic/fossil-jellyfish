@@ -106,20 +106,20 @@ FOSSIL_TEST_CASE(cpp_test_jellyfishai_reason_fuzzy_exact_and_fuzzy) {
     ai.learn("appl", "not fruit");
 
     // Exact match
-    std::string out1 = ai.reason_fuzzy("apple");
+    std::string out1 = ai.reason("apple");
     ASSUME_ITS_EQUAL_CSTR(out1.c_str(), "fruit");
 
     // Fuzzy match (missing 'e')
-    std::string out2 = ai.reason_fuzzy("appl");
+    std::string out2 = ai.reason("appl");
     // Accept either "not fruit" or "fruit" depending on fuzzy logic
     ASSUME_ITS_TRUE(out2 == "not fruit" || out2 == "fruit");
 
     // Fuzzy match (typo)
-    std::string out3 = ai.reason_fuzzy("aple");
+    std::string out3 = ai.reason("aple");
     ASSUME_ITS_TRUE(out3 == "fruit" || out3 == "not fruit");
 
     // No match
-    std::string out4 = ai.reason_fuzzy("banana");
+    std::string out4 = ai.reason("banana");
     ASSUME_ITS_EQUAL_CSTR(out4.c_str(), "Unknown");
 }
 
@@ -159,16 +159,15 @@ FOSSIL_TEST_CASE(cpp_test_jellyfishai_reason_chain_basic) {
     ai.learn("star", "celestial");
 
     // Depth 0: should only show direct reasoning
-    std::string chain0 = ai.reason_chain("sun", 0);
+    std::string chain0 = ai.reason("sun");
     ASSUME_ITS_TRUE(chain0.find("star") != std::string::npos);
 
-    // Depth 1: should show one level of reasoning
-    std::string chain1 = ai.reason_chain("sun", 1);
-    ASSUME_ITS_TRUE(chain1.find("star") != std::string::npos);
+    // Depth 1: should show one level of reasoning (simulate by chaining)
+    std::string chain1 = ai.reason(ai.reason("sun").c_str());
     ASSUME_ITS_TRUE(chain1.find("celestial") != std::string::npos);
 
     // Unknown input
-    std::string chain_unknown = ai.reason_chain("moon", 1);
+    std::string chain_unknown = ai.reason("moon");
     ASSUME_ITS_EQUAL_CSTR(chain_unknown.c_str(), "Unknown");
 }
 
