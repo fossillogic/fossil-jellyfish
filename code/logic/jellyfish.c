@@ -738,7 +738,7 @@ int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish
             memset(current, 0, sizeof(*current));
             char *start = strchr(trim, '\'');
             char *end = start ? strchr(start+1, '\'') : NULL;
-            if (start && end && (end - start - 1) < sizeof(current->name)) {
+            if (start && end && (end - start - 1) < (long)sizeof(current->name)) {
                 strncpy(current->name, start+1, end-start-1);
                 current->name[end-start-1] = 0;
             }
