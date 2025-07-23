@@ -6,31 +6,21 @@ Jellyfish is a lightweight, portable AI library written in pure C with no extern
 
 This file defines a **Jellyfish mindset**, mapping named personalities to model chains (`.fish` files):
 
-```meson
-# This is the primary logic bundle for TAI personality
-
+```ini
 mindset('core_logic') {
   description: 'Fundamental AI building blocks'
-  priority: 1
-  models: [
-    'logic.fish',
-    'nlp.fish',
-    'ethics.fish'
-  ]
   tags: ['core']
+  models: ['core_logic.fish']
+  priority: 1
   confidence_threshold: 0.5
-
-  #:bootstrap
-  #:taint-free
 }
 
-# Another mindset with conditional loading
 mindset('persona_trump') {
   description: 'Simulates Donald Trump speech pattern'
-  models: ['trump_speech.fish']
-  activation_condition: 'input contains "Trump"'
+  tags: ['persona']
+  models: ['persona_trump.fish']
   priority: 10
-  #:persona
+  # activation_condition: input contains "Trump"
 }
 ```
 
@@ -51,17 +41,41 @@ A `.fish` file stores learned associations (called *thought blocks*) in JSON for
     {
       "input": "fire",
       "output": "hot",
-      "timestamp": 1620000000
+      "hash": "b1946ac92492d2347c6235b4d2611184",
+      "timestamp": 1620000000,
+      "delta_ms": 0,
+      "duration_ms": 12,
+      "valid": 1,
+      "confidence": 0.98,
+      "usage_count": 5,
+      "device_id": "a1b2c3d4e5f6a7b8",
+      "signature": "00112233445566778899aabbccddeeff"
     },
     {
       "input": "ice",
       "output": "cold",
-      "timestamp": 1620001000
+      "hash": "e4da3b7fbbce2345d7772b0674a318d5",
+      "timestamp": 1620001000,
+      "delta_ms": 1000,
+      "duration_ms": 10,
+      "valid": 1,
+      "confidence": 0.95,
+      "usage_count": 3,
+      "device_id": "a1b2c3d4e5f6a7b8",
+      "signature": "00112233445566778899aabbccddeeff"
     },
     {
       "input": "wind",
       "output": "fast",
-      "timestamp": 1620002000
+      "hash": "1679091c5a880faf6fb5e6087eb1b2dc",
+      "timestamp": 1620002000,
+      "delta_ms": 1000,
+      "duration_ms": 8,
+      "valid": 1,
+      "confidence": 0.92,
+      "usage_count": 2,
+      "device_id": "a1b2c3d4e5f6a7b8",
+      "signature": "00112233445566778899aabbccddeeff"
     }
   ]
 }
