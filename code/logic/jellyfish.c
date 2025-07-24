@@ -108,6 +108,8 @@ static bool parse_number_field(const char **ptr, const char *key, double *out_d,
     return true;
 }
 
+// HASH Algorithm magic
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 uint64_t get_time_microseconds(void) {
@@ -125,17 +127,62 @@ uint64_t get_time_microseconds(void) {
 }
 #endif
 
-// Optional: device-specific MAC-derived salt
+#if defined(_WIN32) || defined(_WIN64)
+// Windows version
+#include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
+
 static uint64_t get_device_salt(void) {
-    // NOTE: Replace with real MAC read for production. Here's a dummy hash.
-    const char *fake_mac = "00:11:22:33:44:55";
+    IP_ADAPTER_INFO adapterInfo[16];
+    DWORD buflen = sizeof(adapterInfo);
     uint64_t salt = 0xcbf29ce484222325ULL;
-    for (size_t i = 0; fake_mac[i]; ++i) {
-        salt ^= (uint8_t)fake_mac[i];
-        salt *= 0x100000001b3ULL;
+
+    if (GetAdaptersInfo(adapterInfo, &buflen) == NO_ERROR) {
+        PIP_ADAPTER_INFO adapter = adapterInfo;
+        while (adapter) {
+            if (adapter->AddressLength == 6) {
+                for (UINT i = 0; i < adapter->AddressLength; ++i) {
+                    salt ^= adapter->Address[i];
+                    salt *= 0x100000001b3ULL;
+                }
+                break;  // Use the first valid MAC
+            }
+            adapter = adapter->Next;
+        }
     }
     return salt;
 }
+
+#else
+// POSIX (Linux/macOS)
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+static uint64_t get_device_salt(void) {
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) return 0xcbf29ce484222325ULL; // Fallback
+
+    struct ifreq ifr;
+    const char *ifname = "eth0"; // Change to "en0" for macOS if needed
+    strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
+
+    uint64_t salt = 0xcbf29ce484222325ULL;
+
+    if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
+        unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
+        for (int i = 0; i < 6; ++i) {
+            salt ^= mac[i];
+            salt *= 0x100000001b3ULL;
+        }
+    }
+
+    close(sock);
+    return salt;
+}
+#endif
 
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
     const uint64_t PRIME = 0x100000001b3ULL;
