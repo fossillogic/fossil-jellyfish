@@ -110,7 +110,7 @@ static bool parse_number_field(const char **ptr, const char *key, double *out_d,
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
-uint64_t get_time_microseconds() {
+uint64_t get_time_microseconds(void) {
     FILETIME ft;
     GetSystemTimeAsFileTime(&ft);
     uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
@@ -118,7 +118,7 @@ uint64_t get_time_microseconds() {
 }
 #else
 #include <sys/time.h>
-uint64_t get_time_microseconds() {
+uint64_t get_time_microseconds(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint64_t)tv.tv_sec * 1000000ULL + tv.tv_usec;
@@ -126,7 +126,7 @@ uint64_t get_time_microseconds() {
 #endif
 
 // Optional: device-specific MAC-derived salt
-static uint64_t get_device_salt() {
+static uint64_t get_device_salt(void) {
     // NOTE: Replace with real MAC read for production. Here's a dummy hash.
     const char *fake_mac = "00:11:22:33:44:55";
     uint64_t salt = 0xcbf29ce484222325ULL;
