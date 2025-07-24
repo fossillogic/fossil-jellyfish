@@ -128,7 +128,9 @@ uint64_t get_time_microseconds(void) {
 #endif
 
 #if defined(_WIN32) || defined(_WIN64)
-// Windows version
+// ==========================
+// Windows Implementation
+// ==========================
 #include <iphlpapi.h>
 #pragma comment(lib, "iphlpapi.lib")
 
@@ -141,11 +143,11 @@ static uint64_t get_device_salt(void) {
         PIP_ADAPTER_INFO adapter = adapterInfo;
         while (adapter) {
             if (adapter->AddressLength == 6) {
-                for (UINT i = 0; i < adapter->AddressLength; ++i) {
+                for (UINT i = 0; i < 6; ++i) {
                     salt ^= adapter->Address[i];
                     salt *= 0x100000001b3ULL;
                 }
-                break;  // Use the first valid MAC
+                break;
             }
             adapter = adapter->Next;
         }
@@ -153,8 +155,41 @@ static uint64_t get_device_salt(void) {
     return salt;
 }
 
+#elif defined(__APPLE__)
+// ==========================
+// macOS Implementation
+// ==========================
+#include <ifaddrs.h>
+#include <net/if_dl.h>
+
+static uint64_t get_device_salt(void) {
+    struct ifaddrs *ifap, *ifa;
+    uint64_t salt = 0xcbf29ce484222325ULL;
+
+    if (getifaddrs(&ifap) == 0) {
+        for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+            if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_LINK) {
+                struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+                unsigned char *mac = (unsigned char *)LLADDR(sdl);
+                if (sdl->sdl_alen == 6) {
+                    for (int i = 0; i < 6; ++i) {
+                        salt ^= mac[i];
+                        salt *= 0x100000001b3ULL;
+                    }
+                    break;
+                }
+            }
+        }
+        freeifaddrs(ifap);
+    }
+
+    return salt;
+}
+
 #else
-// POSIX (Linux/macOS)
+// ==========================
+// Linux Implementation
+// ==========================
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -163,15 +198,14 @@ static uint64_t get_device_salt(void) {
 
 static uint64_t get_device_salt(void) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) return 0xcbf29ce484222325ULL; // Fallback
+    if (sock < 0) return 0xcbf29ce484222325ULL;
 
     struct ifreq ifr;
-    const char *ifname = "eth0"; // Change to "en0" for macOS if needed
+    const char *ifname = "eth0"; // You may want to scan available interfaces
     strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
-
     uint64_t salt = 0xcbf29ce484222325ULL;
 
-    if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
+    if (ioctl(sock, 0x8927, &ifr) == 0) { // 0x8927 = SIOCGIFHWADDR
         unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
         for (int i = 0; i < 6; ++i) {
             salt ^= mac[i];
