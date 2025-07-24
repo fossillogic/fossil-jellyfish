@@ -1,4 +1,5 @@
 dir = include_directories('.')
+cc = meson.get_compiler('c')
 
 # Check if the host system is Windows
 if host_machine.system() == 'windows'
