@@ -73,19 +73,47 @@ typedef struct {
 
 /**
  * Represents a parsed JellyDSL structure for describing AI mindsets or knowledge.
- * This structure can be used to hold parsed data from a .jellyfish (JellyDSL) file.
- * Suitable for use in Truth Intelligence (TI) or Artificial Intelligence (AI) modules.
+ * This structure is used to represent one complete mindset, including metadata,
+ * activation logic, provenance, memory chain, trust settings, and more.
+ *
+ * Designed to support the Truthful Intelligence (TI) framework.
  */
 typedef struct {
+    // Core Identity and Metadata
     char name[64];                                      // Name of the mindset or knowledge set
+    char description[256];                              // Optional description or notes
     char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Tags for categorization
     size_t tag_count;                                   // Number of tags used
-    char description[256];                              // Optional description or notes
-    fossil_jellyfish_chain chain;                       // Associated memory chain
-    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // List of models associated with this mindset
-    int priority;                                       // Priority level for processing
-    float confidence_threshold;                        // Confidence threshold for decisions
-    int model_count;                                     // Number of models in this mindset
+
+    // Memory Chain
+    fossil_jellyfish_chain chain;                       // Associated hashed memory blocks
+
+    // Model Binding
+    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // List of associated model file names
+    int model_count;                                    // Number of models
+    int priority;                                       // Processing priority (higher = stronger)
+    float confidence_threshold;                         // Minimum confidence to activate
+
+    // Activation Logic
+    char activation_condition[128];                     // Optional rule: when to activate mindset
+
+    // Provenance and Versioning
+    char source_uri[128];                               // Where this mindset originated (URL, path, etc.)
+    uint8_t origin_device_id[16];                       // Optional: hardware/device fingerprint
+    char version[16];                                   // Version label (e.g. "1.0", "2025-07-22")
+    uint8_t content_hash[32];                           // Hash for integrity verification (e.g. SHA-256)
+
+    // Time Awareness
+    uint64_t created_timestamp;                         // When this mindset was created
+    uint64_t expires_timestamp;                         // Optional expiration timestamp (0 = never)
+
+    // Trust and Mutability
+    float trust_score;                                  // External or computed trust score (0.0–1.0)
+    int immutable;                                      // 1 = not modifiable at runtime (system-defined)
+
+    // Behavior Logic (Optional)
+    char state_machine[128];                            // Optional behavior/state definition (as DSL or JSON)
+
 } fossil_jellyfish_jellydsl;
 
 // *****************************************************************************
