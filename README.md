@@ -7,20 +7,40 @@ Jellyfish is a lightweight, portable AI library written in pure C with no extern
 This file defines a **Jellyfish mindset**, mapping named personalities to model chains (`.fish` files):
 
 ```ini
-mindset('core_logic') {
-  description: 'Fundamental AI building blocks'
-  tags: ['core']
-  models: ['core_logic.fish']
+model('core_logic') {
+  description: 'Fundamental AI reasoning and logic modules'
+  tags: ['core', 'logic', 'reasoning']
+  models: ['logic.fish', 'nlp.fish', 'ethics.fish']
   priority: 1
-  confidence_threshold: 0.5
+  confidence_threshold: 0.75
+  activation_condition: 'always'
+  source_uri: 'https://fossillogic.ai/models/core_logic'
+  origin_device_id: '00:1A:7D:DA:71:13'
+  version: '1.0.0'
+  content_hash: 'a3f5c7d89b4e1f23a567b9d0c1e2f3456789abcdef0123456789abcdef012345'
+  created_at: 1689004800
+  updated_at: 1689091200
+  trust_score: 0.98
+  immutable: 1
+  state_machine: 'logic_state_v1'
 }
 
-mindset('persona_trump') {
-  description: 'Simulates Donald Trump speech pattern'
-  tags: ['persona']
-  models: ['persona_trump.fish']
-  priority: 10
-  # activation_condition: input contains "Trump"
+model('persona_trump') {
+  description: 'Personality model for Donald Trump simulation'
+  tags: ['persona', 'politics', 'simulation']
+  models: ['trump_brain.fish', 'debate_logic.fish']
+  priority: 5
+  confidence_threshold: 0.6
+  activation_condition: 'user_request == "trump_mode"'
+  source_uri: 'https://fossillogic.ai/models/persona_trump'
+  origin_device_id: '00:1B:44:11:3A:B7'
+  version: '2.1.4'
+  content_hash: 'b1a2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0'
+  created_at: 1689000000
+  updated_at: 1689050000
+  trust_score: 0.85
+  immutable: 0
+  state_machine: 'persona_v2'
 }
 ```
 
