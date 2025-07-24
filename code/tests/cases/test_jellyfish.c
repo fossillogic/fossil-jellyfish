@@ -83,13 +83,38 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_cleanup) {
 FOSSIL_TEST_CASE(c_test_jellyfish_chain_hash) {
     uint8_t hash1[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
     uint8_t hash2[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
+
+    // Inputs differ only in output string
     fossil_jellyfish_hash("foo", "bar", hash1);
     fossil_jellyfish_hash("foo", "baz", hash2);
 
+    // Ensure hashes differ
     int diff = 0;
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
-        if (hash1[i] != hash2[i]) diff = 1;
+        if (hash1[i] != hash2[i]) {
+            diff = 1;
+            break;
+        }
+
     ASSUME_ITS_TRUE(diff);
+}
+
+FOSSIL_TEST_CASE(c_test_jellyfish_chain_hash_stability) {
+    uint8_t hash1[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
+    uint8_t hash2[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
+
+    fossil_jellyfish_hash("ping", "pong", hash1);
+    fossil_jellyfish_hash("ping", "pong", hash2); // Run quickly before time changes
+
+    int identical = 1;
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+        if (hash1[i] != hash2[i]) {
+            identical = 0;
+            break;
+        }
+
+    // It might still fail due to microsecond tick!
+    ASSUME_ITS_TRUE(identical || !"Hashes changed too fast – maybe time ticked");
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_chain_save_and_load) {
@@ -258,6 +283,7 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_learn_and_reason);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_cleanup);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_hash);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_hash_stability);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_save_and_load);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_save_fail);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_load_fail);
