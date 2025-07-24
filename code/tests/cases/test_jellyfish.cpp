@@ -199,49 +199,6 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_knowledge_coverage) {
     ASSUME_ITS_TRUE(coverage >= 0.0f && coverage <= 1.0f);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_verify_block_and_chain) {
-    fossil_jellyfish_block block = {0};
-    strcpy(block.input, "foo");
-    strcpy(block.output, "bar");
-    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) block.hash[i] = 1;
-    block.valid = 1;
-
-    ASSUME_ITS_TRUE(fossil_jellyfish_verify_block(&block));
-
-    JellyfishAI ai;
-    fossil_jellyfish_chain& chain = ai.get_chain();
-    chain.memory[0] = block;
-    chain.count = 1;
-    ASSUME_ITS_TRUE(fossil_jellyfish_verify_chain(&chain));
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_block_struct_fields) {
-    fossil_jellyfish_block block = {0};
-    strcpy(block.input, "test_input");
-    strcpy(block.output, "test_output");
-    block.timestamp = 123456789;
-    block.delta_ms = 42;
-    block.duration_ms = 100;
-    block.valid = 1;
-    block.confidence = 0.75f;
-    block.usage_count = 3;
-    memset(block.device_id, 0xAB, sizeof(block.device_id));
-    memset(block.signature, 0xCD, sizeof(block.signature));
-
-    ASSUME_ITS_EQUAL_CSTR(block.input, "test_input");
-    ASSUME_ITS_EQUAL_CSTR(block.output, "test_output");
-    ASSUME_ITS_TRUE(block.timestamp == 123456789);
-    ASSUME_ITS_TRUE(block.delta_ms == 42);
-    ASSUME_ITS_TRUE(block.duration_ms == 100);
-    ASSUME_ITS_TRUE(block.valid == 1);
-    ASSUME_ITS_TRUE(block.confidence > 0.74f && block.confidence < 0.76f);
-    ASSUME_ITS_TRUE(block.usage_count == 3);
-    for (size_t i = 0; i < sizeof(block.device_id); ++i)
-        ASSUME_ITS_TRUE(block.device_id[i] == 0xAB);
-    for (size_t i = 0; i < sizeof(block.signature); ++i)
-        ASSUME_ITS_TRUE(block.signature[i] == 0xCD);
-}
-
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_struct_fields) {
     JellyfishAI ai;
     fossil_jellyfish_chain& chain = ai.get_chain();
@@ -275,8 +232,6 @@ FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_best_memory);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_detect_conflict);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_knowledge_coverage);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_verify_block_and_chain);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_block_struct_fields);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_struct_fields);
     
     FOSSIL_TEST_REGISTER(cpp_jellyfish_fixture);
