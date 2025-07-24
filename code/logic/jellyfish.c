@@ -159,6 +159,7 @@ static uint64_t get_device_salt(void) {
 // ==========================
 // macOS Implementation
 // ==========================
+#define _DARWIN_C_SOURCE
 #include <ifaddrs.h>
 #include <net/if_dl.h>   // <-- required for sockaddr_dl and AF_LINK
 
