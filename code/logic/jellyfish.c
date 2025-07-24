@@ -139,63 +139,64 @@ uint64_t get_time_microseconds(void) {
 
 static uint64_t get_device_salt(void) {
     uint64_t salt = DEFAULT_SALT;
+    ULONG size = 15000;
+    IP_ADAPTER_ADDRESSES *adapters = (IP_ADAPTER_ADDRESSES *)malloc(size);
+    if (!adapters) return salt;
 
-    ULONG outBufLen = 15000;
-    IP_ADAPTER_ADDRESSES *addresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
-    if (!addresses) return salt;
-
-    if (GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST, NULL, addresses, &outBufLen) == NO_ERROR) {
-        for (IP_ADAPTER_ADDRESSES *addr = addresses; addr != NULL; addr = addr->Next) {
-            if (addr->PhysicalAddressLength == 6) {
+    if (GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST, NULL, adapters, &size) == NO_ERROR) {
+        for (IP_ADAPTER_ADDRESSES *a = adapters; a; a = a->Next) {
+            if (a->PhysicalAddressLength == 6) {
                 for (ULONG i = 0; i < 6; ++i) {
-                    salt ^= addr->PhysicalAddress[i];
+                    salt ^= a->PhysicalAddress[i];
                     salt *= 0x100000001b3ULL;
                 }
                 break;
             }
         }
     }
-
-    free(addresses);
+    free(adapters);
     return salt;
 }
 
 #elif defined(__APPLE__) && defined(__MACH__)
-// ==========================================
-// macOS implementation using getifaddrs()
-// ==========================================
+// ========================
+// macOS / Darwin
+// ========================
 #include <ifaddrs.h>
 #include <net/if_dl.h>
+#include <net/if.h>         // for IFNAMSIZ
+#include <sys/socket.h>     // for struct sockaddr and AF_LINK
 
 static uint64_t get_device_salt(void) {
-    struct ifaddrs *ifap = NULL;
     uint64_t salt = DEFAULT_SALT;
+    struct ifaddrs *ifap = NULL;
 
-    if (getifaddrs(&ifap) == 0) {
-        for (struct ifaddrs *ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
-            if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_LINK)
-                continue;
+    if (getifaddrs(&ifap) != 0 || !ifap)
+        return salt;
 
-            struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
-            const unsigned char *mac = (const unsigned char *)LLADDR(sdl);
-            if (sdl->sdl_alen == 6) {
-                for (int i = 0; i < 6; ++i) {
-                    salt ^= mac[i];
-                    salt *= 0x100000001b3ULL;
-                }
-                break;
+    for (struct ifaddrs *ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_LINK)
+            continue;
+
+        struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+        const unsigned char *mac = (const unsigned char *)LLADDR(sdl);
+        if (sdl->sdl_alen == 6) {
+            for (int i = 0; i < 6; ++i) {
+                salt ^= mac[i];
+                salt *= 0x100000001b3ULL;
             }
+            break;
         }
-        freeifaddrs(ifap);
     }
 
+    freeifaddrs(ifap);
     return salt;
 }
 
 #else
-// ==========================================
-// Linux implementation using ioctl
-// ==========================================
+// ========================
+// Linux and Unix-like OS
+// ========================
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -213,7 +214,7 @@ static uint64_t get_device_salt(void) {
         memset(&ifr, 0, sizeof(ifr));
         strncpy(ifr.ifr_name, interfaces[i], IFNAMSIZ - 1);
 
-        // SIOCGIFHWADDR = 0x8927 on Linux
+        // 0x8927 = SIOCGIFHWADDR on Linux
         if (ioctl(sock, 0x8927, &ifr) == 0) {
             unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
             for (int j = 0; j < 6; ++j) {
