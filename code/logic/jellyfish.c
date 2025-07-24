@@ -131,15 +131,17 @@ uint64_t get_time_microseconds(void) {
 #define DEFAULT_SALT 0xcbf29ce484222325ULL
 
 #if defined(_WIN32) || defined(_WIN64)
-// ===================================================
-// Windows implementation using GetAdaptersAddresses()
-// ===================================================
-#include <winsock2.h>
+// =======================
+// Windows (MinGW-safe)
+// =======================
+#include <winsock2.h>     // MUST come first
 #include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
 
 static uint64_t get_device_salt(void) {
     uint64_t salt = DEFAULT_SALT;
     ULONG size = 15000;
+
     IP_ADAPTER_ADDRESSES *adapters = (IP_ADAPTER_ADDRESSES *)malloc(size);
     if (!adapters) return salt;
 
@@ -154,18 +156,19 @@ static uint64_t get_device_salt(void) {
             }
         }
     }
+
     free(adapters);
     return salt;
 }
 
 #elif defined(__APPLE__) && defined(__MACH__)
-// ========================
-// macOS / Darwin
-// ========================
+// =======================
+// macOS
+// =======================
 #include <ifaddrs.h>
 #include <net/if_dl.h>
-#include <net/if.h>         // for IFNAMSIZ
-#include <sys/socket.h>     // for struct sockaddr and AF_LINK
+#include <net/if.h>
+#include <sys/socket.h>
 
 static uint64_t get_device_salt(void) {
     uint64_t salt = DEFAULT_SALT;
@@ -194,9 +197,9 @@ static uint64_t get_device_salt(void) {
 }
 
 #else
-// ========================
-// Linux and Unix-like OS
-// ========================
+// =======================
+// Linux / BSD
+// =======================
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -210,12 +213,12 @@ static uint64_t get_device_salt(void) {
 
     struct ifreq ifr;
     const char *interfaces[] = { "eth0", "wlan0", "en0", "eno1" };
+
     for (size_t i = 0; i < sizeof(interfaces)/sizeof(interfaces[0]); ++i) {
         memset(&ifr, 0, sizeof(ifr));
-        strncpy(ifr.ifr_name, interfaces[i], IFNAMSIZ - 1);
+        strncpy(ifr.ifr_name, interfaces[i], sizeof(ifr.ifr_name) - 1);
 
-        // 0x8927 = SIOCGIFHWADDR on Linux
-        if (ioctl(sock, 0x8927, &ifr) == 0) {
+        if (ioctl(sock, 0x8927, &ifr) == 0) {  // SIOCGIFHWADDR
             unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
             for (int j = 0; j < 6; ++j) {
                 salt ^= mac[j];
