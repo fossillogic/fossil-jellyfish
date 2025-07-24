@@ -155,39 +155,45 @@ static uint64_t get_device_salt(void) {
     return salt;
 }
 
-#elif defined(__APPLE__)
-// ==========================
-// macOS Implementation
-// ==========================
-#define _DARWIN_C_SOURCE
+#elif defined(__APPLE__) && defined(__MACH__)
+// ======================================================
+// macOS / Darwin Implementation for MAC Address as Salt
+// ======================================================
+#define _GNU_SOURCE     // Needed for BSD extensions
+#define _DARWIN_C_SOURCE 1  // Explicitly enable AF_LINK on Darwin
+
 #include <ifaddrs.h>
-#include <net/if_dl.h>   // <-- required for sockaddr_dl and AF_LINK
+#include <net/if_dl.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
 
 static uint64_t get_device_salt(void) {
-    struct ifaddrs *ifap, *ifa;
+    struct ifaddrs *ifap = NULL;
     uint64_t salt = 0xcbf29ce484222325ULL;
 
-    if (getifaddrs(&ifap) == 0) {
-        for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
-            if (ifa->ifa_addr == NULL) continue;
-
-            // AF_LINK is used on macOS/BSD to indicate a hardware link-layer address
-            if (ifa->ifa_addr->sa_family == AF_LINK) {
-                struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
-                unsigned char *mac = (unsigned char *)LLADDR(sdl);
-
-                if (sdl->sdl_alen == 6) {
-                    for (int i = 0; i < 6; ++i) {
-                        salt ^= mac[i];
-                        salt *= 0x100000001b3ULL;
-                    }
-                    break; // use first MAC found
-                }
-            }
-        }
-        freeifaddrs(ifap);
+    if (getifaddrs(&ifap) != 0 || !ifap) {
+        return salt;
     }
 
+    for (struct ifaddrs *ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr) continue;
+
+        if (ifa->ifa_addr->sa_family == AF_LINK) {
+            struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+            const unsigned char *mac = (const unsigned char *)LLADDR(sdl);
+
+            if (sdl->sdl_alen == 6) {
+                for (int i = 0; i < 6; ++i) {
+                    salt ^= mac[i];
+                    salt *= 0x100000001b3ULL;
+                }
+                break; // Use the first valid MAC
+            }
+        }
+    }
+
+    freeifaddrs(ifap);
     return salt;
 }
 #else
