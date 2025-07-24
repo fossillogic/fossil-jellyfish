@@ -706,110 +706,126 @@ bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain) {
 }
 
 /**
- * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts mindsets.
+ * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts models.
  *
- * @param filepath       Path to the .jellyfish file.
- * @param out_mindsets   Array to store parsed mindsets.
- * @param max_mindsets   Maximum number of mindsets to store.
- * @return               Number of mindsets parsed, or 0 on failure.
+ * @param filepath     Path to the .jellyfish file.
+ * @param out_models   Array to store parsed models.
+ * @param max_models   Maximum number of models to store.
+ * @return             Number of models parsed, or 0 on failure.
  */
-int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_mindsets) {
-    if (!filepath || !out || max_mindsets <= 0) return 0;
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_models) {
+    if (!filepath || !out || max_models <= 0) return 0;
 
     FILE *fp = fopen(filepath, "r");
     if (!fp) return 0;
 
     char line[1024];
-    int mindset_count = 0;
+    int model_count = 0;
     fossil_jellyfish_jellydsl *current = NULL;
-    int in_mindset = 0;
+    int in_model = 0;
 
     while (fgets(line, sizeof(line), fp)) {
         char *trim = line;
         while (isspace(*trim)) ++trim;
         size_t len = strlen(trim);
-        while (len > 0 && (trim[len-1] == '\n' || trim[len-1] == '\r')) trim[--len] = 0;
+        while (len > 0 && (trim[len - 1] == '\n' || trim[len - 1] == '\r')) trim[--len] = 0;
 
-        if (strncmp(trim, "mindset(", 8) == 0) {
-            if (mindset_count >= max_mindsets) break;
-            current = &out[mindset_count++];
+        // Start of a new model block
+        if (strncmp(trim, "model(", 6) == 0) {
+            if (model_count >= max_models) break;
+            current = &out[model_count++];
             memset(current, 0, sizeof(*current));
+
             char *start = strchr(trim, '\'');
-            char *end = start ? strchr(start+1, '\'') : NULL;
-            if (start && end && (end - start - 1) < (long)sizeof(current->name)) {
-                strncpy(current->name, start+1, end-start-1);
-                current->name[end-start-1] = 0;
+            char *end = start ? strchr(start + 1, '\'') : NULL;
+            if (start && end && (end - start - 1) < sizeof(current->name)) {
+                strncpy(current->name, start + 1, end - start - 1);
+                current->name[end - start - 1] = '\0';
             }
-            in_mindset = 1;
+
+            in_model = 1;
             continue;
         }
-        if (!in_mindset || !current) continue;
 
+        if (!in_model || !current) continue;
+
+        // End of model block
         if (strchr(trim, '}')) {
-            in_mindset = 0;
+            in_model = 0;
             continue;
         }
 
-        if (strncmp(trim, "description:", 12) == 0) {
-            char *desc = trim + 12;
-            while (isspace(*desc)) ++desc;
-            if (*desc == '\'') ++desc;
-            char *end = strrchr(desc, '\'');
-            if (end) *end = 0;
-            strncpy(current->description, desc, sizeof(current->description)-1);
-            continue;
-        }
+        // Handle key:value lines
+        char *colon = strchr(trim, ':');
+        if (!colon) continue;
 
-        if (strncmp(trim, "tags:", 5) == 0) {
-            char *tags = strchr(trim, '[');
-            if (tags) {
-                tags++;
-                char *tok = strtok(tags, ",]");
+        *colon = '\0';
+        char *key = trim;
+        char *value = colon + 1;
+        while (isspace(*value)) value++;
+
+        // Trim quotes from value
+        if (*value == '\'' || *value == '"') value++;
+        char *quote_end = strrchr(value, '\'');
+        if (!quote_end) quote_end = strrchr(value, '"');
+        if (quote_end) *quote_end = '\0';
+
+        // Parse specific fields
+        if (strcmp(key, "description") == 0) {
+            strncpy(current->description, value, sizeof(current->description) - 1);
+        } else if (strcmp(key, "activation_condition") == 0) {
+            strncpy(current->activation_condition, value, sizeof(current->activation_condition) - 1);
+        } else if (strcmp(key, "source_uri") == 0) {
+            strncpy(current->source_uri, value, sizeof(current->source_uri) - 1);
+        } else if (strcmp(key, "origin_device_id") == 0) {
+            strncpy(current->origin_device_id, value, sizeof(current->origin_device_id) - 1);
+        } else if (strcmp(key, "version") == 0) {
+            strncpy(current->version, value, sizeof(current->version) - 1);
+        } else if (strcmp(key, "content_hash") == 0) {
+            strncpy(current->content_hash, value, sizeof(current->content_hash) - 1);
+        } else if (strcmp(key, "state_machine") == 0) {
+            strncpy(current->state_machine, value, sizeof(current->state_machine) - 1);
+        } else if (strcmp(key, "created_at") == 0) {
+            current->created_at = (uint64_t)atoll(value);
+        } else if (strcmp(key, "updated_at") == 0) {
+            current->updated_at = (uint64_t)atoll(value);
+        } else if (strcmp(key, "trust_score") == 0) {
+            current->trust_score = strtof(value, NULL);
+        } else if (strcmp(key, "immutable") == 0) {
+            current->immutable = atoi(value);
+        } else if (strcmp(key, "priority") == 0) {
+            current->priority = atoi(value);
+        } else if (strcmp(key, "confidence_threshold") == 0) {
+            current->confidence_threshold = strtof(value, NULL);
+        } else if (strcmp(key, "tags") == 0) {
+            char *tag = strchr(line, '[');
+            if (tag) {
+                tag++;
+                char *tok = strtok(tag, ",]");
                 while (tok && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
-                    while (*tok && (isspace(*tok) || *tok == '\'' || *tok == '"')) ++tok;
+                    while (*tok == ' ' || *tok == '\'' || *tok == '"') tok++;
                     char *end = tok + strlen(tok) - 1;
-                    while (end > tok && (*end == '\'' || *end == '"' || isspace(*end))) *end-- = 0;
+                    while (end > tok && (*end == '\'' || *end == '"' || *end == ' ')) *end-- = '\0';
                     strncpy(current->tags[current->tag_count++], tok, 31);
                     tok = strtok(NULL, ",]");
                 }
             }
-            continue;
-        }
-
-        if (strncmp(trim, "models:", 7) == 0) {
-            // Parse models as a list of strings (if you add to struct)
-            char *models = strchr(trim, '[');
-            if (models && current->model_count < FOSSIL_JELLYFISH_MAX_MODELS) {
-            models++;
-            char *tok = strtok(models, ",]");
-            while (tok && current->model_count < FOSSIL_JELLYFISH_MAX_MODELS) {
-                while (*tok && (isspace(*tok) || *tok == '\'' || *tok == '"')) ++tok;
-                char *end = tok + strlen(tok) - 1;
-                while (end > tok && (*end == '\'' || *end == '"' || isspace(*end))) *end-- = 0;
-                strncpy(current->models[current->model_count++], tok, 31);
-                tok = strtok(NULL, ",]");
+        } else if (strcmp(key, "models") == 0) {
+            char *mod = strchr(line, '[');
+            if (mod) {
+                mod++;
+                char *tok = strtok(mod, ",]");
+                while (tok && current->model_count < FOSSIL_JELLYFISH_MAX_MODELS) {
+                    while (*tok == ' ' || *tok == '\'' || *tok == '"') tok++;
+                    char *end = tok + strlen(tok) - 1;
+                    while (end > tok && (*end == '\'' || *end == '"' || *end == ' ')) *end-- = '\0';
+                    strncpy(current->models[current->model_count++], tok, 31);
+                    tok = strtok(NULL, ",]");
+                }
             }
-            }
-            continue;
         }
-
-        if (strncmp(trim, "priority:", 9) == 0) {
-            char *prio = trim + 9;
-            while (isspace(*prio)) ++prio;
-            current->priority = atoi(prio);
-            continue;
-        }
-
-        if (strncmp(trim, "confidence_threshold:", 20) == 0) {
-            char *conf = trim + 20;
-            while (isspace(*conf)) ++conf;
-            current->confidence_threshold = (float)atof(conf);
-            continue;
-        }
-
-        // Ignore comments and unknown lines
     }
 
     fclose(fp);
-    return mindset_count;
+    return model_count;
 }
