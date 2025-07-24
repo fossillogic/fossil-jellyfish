@@ -108,15 +108,48 @@ static bool parse_number_field(const char **ptr, const char *key, double *out_d,
     return true;
 }
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+uint64_t get_time_microseconds() {
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    return t / 10; // 100-nanosecond intervals to microseconds
+}
+#else
+#include <sys/time.h>
+uint64_t get_time_microseconds() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000000ULL + tv.tv_usec;
+}
+#endif
+
+// Optional: device-specific MAC-derived salt
+static uint64_t get_device_salt() {
+    // NOTE: Replace with real MAC read for production. Here's a dummy hash.
+    const char *fake_mac = "00:11:22:33:44:55";
+    uint64_t salt = 0xcbf29ce484222325ULL;
+    for (size_t i = 0; fake_mac[i]; ++i) {
+        salt ^= (uint8_t)fake_mac[i];
+        salt *= 0x100000001b3ULL;
+    }
+    return salt;
+}
+
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
     const uint64_t PRIME = 0x100000001b3ULL;
-    uint64_t state1 = 0xcbf29ce484222325ULL;
-    uint64_t state2 = 0x84222325cbf29ce4ULL;
+    static uint64_t SALT = 0;
+    if (SALT == 0) SALT = get_device_salt();  // Initialize salt once
+
+    uint64_t state1 = 0xcbf29ce484222325ULL ^ SALT;
+    uint64_t state2 = 0x84222325cbf29ce4ULL ^ ~SALT;
 
     size_t in_len = strlen(input);
     size_t out_len = strlen(output);
 
-    // Primary input loop
+    uint64_t nonce = get_time_microseconds();  // Microsecond resolution
+
     for (size_t i = 0; i < in_len; ++i) {
         state1 ^= (uint8_t)input[i];
         state1 *= PRIME;
@@ -131,9 +164,9 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
         state2 ^= (state2 << 31);
     }
 
-    // Mix in lengths and constants
-    state1 ^= (uint64_t)in_len * 0x9e3779b97f4a7c15ULL;
-    state2 ^= (uint64_t)out_len * 0x94d049bb133111ebULL;
+    // Nonce and length entropy
+    state1 ^= nonce ^ ((uint64_t)in_len << 32);
+    state2 ^= ~nonce ^ ((uint64_t)out_len << 16);
 
     // Mixing rounds
     for (int i = 0; i < 6; ++i) {
@@ -145,11 +178,11 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
         state2 *= PRIME;
     }
 
-    // Output spread: fill hash_out[]
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
         uint64_t mixed = (i % 2 == 0) ? state1 : state2;
         mixed ^= (mixed >> ((i % 7) + 13));
         mixed *= PRIME;
+        mixed ^= SALT;
         hash_out[i] = (uint8_t)((mixed >> (8 * (i % 8))) & 0xFF);
     }
 }
