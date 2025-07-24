@@ -127,79 +127,75 @@ uint64_t get_time_microseconds(void) {
 }
 #endif
 
+// Default fallback salt (FNV offset basis)
+#define DEFAULT_SALT 0xcbf29ce484222325ULL
+
 #if defined(_WIN32) || defined(_WIN64)
-// ==========================
-// Windows Implementation
-// ==========================
+// ===================================================
+// Windows implementation using GetAdaptersAddresses()
+// ===================================================
+#include <winsock2.h>
 #include <iphlpapi.h>
-#pragma comment(lib, "iphlpapi.lib")
 
 static uint64_t get_device_salt(void) {
-    IP_ADAPTER_INFO adapterInfo[16];
-    DWORD buflen = sizeof(adapterInfo);
-    uint64_t salt = 0xcbf29ce484222325ULL;
+    uint64_t salt = DEFAULT_SALT;
 
-    if (GetAdaptersInfo(adapterInfo, &buflen) == NO_ERROR) {
-        PIP_ADAPTER_INFO adapter = adapterInfo;
-        while (adapter) {
-            if (adapter->AddressLength == 6) {
-                for (UINT i = 0; i < 6; ++i) {
-                    salt ^= adapter->Address[i];
+    ULONG outBufLen = 15000;
+    IP_ADAPTER_ADDRESSES *addresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
+    if (!addresses) return salt;
+
+    if (GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST, NULL, addresses, &outBufLen) == NO_ERROR) {
+        for (IP_ADAPTER_ADDRESSES *addr = addresses; addr != NULL; addr = addr->Next) {
+            if (addr->PhysicalAddressLength == 6) {
+                for (ULONG i = 0; i < 6; ++i) {
+                    salt ^= addr->PhysicalAddress[i];
                     salt *= 0x100000001b3ULL;
                 }
                 break;
             }
-            adapter = adapter->Next;
         }
     }
+
+    free(addresses);
     return salt;
 }
 
 #elif defined(__APPLE__) && defined(__MACH__)
-// ======================================================
-// macOS / Darwin Implementation for MAC Address as Salt
-// ======================================================
-#define _GNU_SOURCE     // Needed for BSD extensions
-#define _DARWIN_C_SOURCE 1  // Explicitly enable AF_LINK on Darwin
-
+// ==========================================
+// macOS implementation using getifaddrs()
+// ==========================================
 #include <ifaddrs.h>
 #include <net/if_dl.h>
-#include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
 
 static uint64_t get_device_salt(void) {
     struct ifaddrs *ifap = NULL;
-    uint64_t salt = 0xcbf29ce484222325ULL;
+    uint64_t salt = DEFAULT_SALT;
 
-    if (getifaddrs(&ifap) != 0 || !ifap) {
-        return salt;
-    }
+    if (getifaddrs(&ifap) == 0) {
+        for (struct ifaddrs *ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+            if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_LINK)
+                continue;
 
-    for (struct ifaddrs *ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
-        if (!ifa->ifa_addr) continue;
-
-        if (ifa->ifa_addr->sa_family == AF_LINK) {
             struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
             const unsigned char *mac = (const unsigned char *)LLADDR(sdl);
-
             if (sdl->sdl_alen == 6) {
                 for (int i = 0; i < 6; ++i) {
                     salt ^= mac[i];
                     salt *= 0x100000001b3ULL;
                 }
-                break; // Use the first valid MAC
+                break;
             }
         }
+        freeifaddrs(ifap);
     }
 
-    freeifaddrs(ifap);
     return salt;
 }
+
 #else
-// ==========================
-// Linux Implementation
-// ==========================
+// ==========================================
+// Linux implementation using ioctl
+// ==========================================
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
@@ -207,19 +203,24 @@ static uint64_t get_device_salt(void) {
 #include <sys/socket.h>
 
 static uint64_t get_device_salt(void) {
+    uint64_t salt = DEFAULT_SALT;
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) return 0xcbf29ce484222325ULL;
+    if (sock < 0) return salt;
 
     struct ifreq ifr;
-    const char *ifname = "eth0"; // You may want to scan available interfaces
-    strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
-    uint64_t salt = 0xcbf29ce484222325ULL;
+    const char *interfaces[] = { "eth0", "wlan0", "en0", "eno1" };
+    for (size_t i = 0; i < sizeof(interfaces)/sizeof(interfaces[0]); ++i) {
+        memset(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, interfaces[i], IFNAMSIZ - 1);
 
-    if (ioctl(sock, 0x8927, &ifr) == 0) { // 0x8927 = SIOCGIFHWADDR
-        unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
-        for (int i = 0; i < 6; ++i) {
-            salt ^= mac[i];
-            salt *= 0x100000001b3ULL;
+        // SIOCGIFHWADDR = 0x8927 on Linux
+        if (ioctl(sock, 0x8927, &ifr) == 0) {
+            unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
+            for (int j = 0; j < 6; ++j) {
+                salt ^= mac[j];
+                salt *= 0x100000001b3ULL;
+            }
+            break;
         }
     }
 
