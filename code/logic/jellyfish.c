@@ -160,7 +160,7 @@ static uint64_t get_device_salt(void) {
 // macOS Implementation
 // ==========================
 #include <ifaddrs.h>
-#include <net/if_dl.h>
+#include <net/if_dl.h>   // <-- required for sockaddr_dl and AF_LINK
 
 static uint64_t get_device_salt(void) {
     struct ifaddrs *ifap, *ifa;
@@ -168,15 +168,19 @@ static uint64_t get_device_salt(void) {
 
     if (getifaddrs(&ifap) == 0) {
         for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
-            if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_LINK) {
+            if (ifa->ifa_addr == NULL) continue;
+
+            // AF_LINK is used on macOS/BSD to indicate a hardware link-layer address
+            if (ifa->ifa_addr->sa_family == AF_LINK) {
                 struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
                 unsigned char *mac = (unsigned char *)LLADDR(sdl);
+
                 if (sdl->sdl_alen == 6) {
                     for (int i = 0; i < 6; ++i) {
                         salt ^= mac[i];
                         salt *= 0x100000001b3ULL;
                     }
-                    break;
+                    break; // use first MAC found
                 }
             }
         }
@@ -185,7 +189,6 @@ static uint64_t get_device_salt(void) {
 
     return salt;
 }
-
 #else
 // ==========================
 // Linux Implementation
