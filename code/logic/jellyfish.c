@@ -19,6 +19,13 @@
 #include <ctype.h>
 #include <time.h>
 
+#if defined(_WIN32)
+#include <winsock2.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+#include <unistd.h>
+#endif
+
 
 // Parses a string like: "key": "value"
 static bool match_key_value(const char **ptr, const char *key, const char *value) {
