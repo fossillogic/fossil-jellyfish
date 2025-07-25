@@ -547,7 +547,7 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
         *dst = '\0';
 
         fprintf(fp, "    {\n");
-        fprintf(fp, "      \"block_index\": %llu,\n", (unsigned long)i);
+        fprintf(fp, "      \"block_index\": %llu,\n", (unsigned long long)i);
         fprintf(fp, "      \"input\": \"%s\",\n", input_escaped);
         fprintf(fp, "      \"output\": \"%s\",\n", output_escaped);
 
