@@ -69,6 +69,10 @@ typedef struct {
 typedef struct {
     fossil_jellyfish_block memory[FOSSIL_JELLYFISH_MAX_MEM];
     size_t count;
+
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];  // ← Needed for file I/O
+    uint64_t created_at;                       // ← Timestamp when this chain was created
+    uint64_t updated_at;                       // ← Timestamp when it was last updated
 } fossil_jellyfish_chain;
 
 /**
