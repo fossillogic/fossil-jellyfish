@@ -19,101 +19,6 @@
 #include <ctype.h>
 #include <time.h>
 
-#if defined(_WIN32)
-#include <winsock2.h>
-#else
-#include <unistd.h>
-#endif
-
-
-// Parses a string like: "key": "value"
-static bool match_key_value(const char **ptr, const char *key, const char *value) {
-    const char *p = *ptr;
-    while (isspace(*p)) p++;
-    size_t klen = strlen(key);
-    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, key, klen) != 0 || strncmp(p + 1 + klen, "\":", 2) != 0)
-        return false;
-    p += klen + 3;
-    while (isspace(*p)) p++;
-    size_t vlen = strlen(value);
-    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, value, vlen) != 0 || strncmp(p + 1 + vlen, "\"", 1) != 0)
-        return false;
-    *ptr = p + vlen + 2;
-    return true;
-}
-
-static bool skip_key(const char **ptr, const char *key) {
-    const char *p = *ptr;
-    while (isspace(*p)) p++;
-    size_t klen = strlen(key);
-    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, key, klen) != 0 || strncmp(p + 1 + klen, "\":", 2) != 0)
-        return false;
-    *ptr = p + klen + 3;
-    return true;
-}
-
-static bool skip_symbol(const char **ptr, char symbol) {
-    const char *p = *ptr;
-    while (isspace(*p)) p++;
-    if (*p != symbol)
-        return false;
-    *ptr = p + 1;
-    return true;
-}
-
-static bool skip_comma(const char **ptr) {
-    const char *p = *ptr;
-    while (isspace(*p)) p++;
-    if (*p == ',') {
-        *ptr = p + 1;
-        return true;
-    }
-    return false;
-}
-
-static bool parse_string_field(const char **ptr, const char *key, char *out, size_t max) {
-    if (!skip_key(ptr, key)) return false;
-    if (!skip_symbol(ptr, '"')) return false;
-
-    const char *p = *ptr;
-    size_t i = 0;
-
-    while (*p && *p != '"' && i < max - 1) {
-        if (*p == '\\' && *(p + 1)) p++; // skip escape
-        out[i++] = *p++;
-    }
-
-    if (*p != '"') return false;
-    out[i] = '\0';
-    *ptr = p + 1;
-    return true;
-}
-
-static bool parse_number_field(const char **ptr, const char *key, double *out_d, uint64_t *out_u64, int *out_i, uint32_t *out_u32) {
-    if (!skip_key(ptr, key)) return false;
-
-    char *end;
-    const char *p = *ptr;
-
-    while (isspace(*p)) p++;
-
-    if (out_d) {
-        *out_d = strtod(p, &end);
-    } else if (out_u64) {
-        *out_u64 = strtoull(p, &end, 10);
-    } else if (out_i) {
-        *out_i = strtol(p, &end, 10);
-    } else if (out_u32) {
-        *out_u32 = strtoul(p, &end, 10);
-    } else {
-        return false;
-    }
-
-    if (end == p) return false;
-    *ptr = end;
-    return true;
-}
-
 // HASH Algorithm magic
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -134,27 +39,33 @@ uint64_t get_time_microseconds(void) {
 #endif
 
 static uint64_t get_device_salt(void) {
+    // FNV-1a 64-bit base offset
     uint64_t hash = 0xcbf29ce484222325ULL;
-    const char *user = getenv("USER");
-    const char *host = getenv("HOSTNAME");
-    char hostname[256];
 
-    if (!host) {
-        gethostname(hostname, sizeof(hostname));
-        host = hostname;
-    }
+    // Cross-platform user and home detection
+#if defined(_WIN32) || defined(_WIN64)
+    const char *vars[] = {
+        getenv("USERNAME"),
+        getenv("USERPROFILE"),
+        getenv("COMPUTERNAME")
+    };
+#else
+    const char *vars[] = {
+        getenv("USER"),
+        getenv("HOME"),
+        getenv("SHELL"),
+        getenv("HOSTNAME")
+    };
+#endif
 
-    if (user) {
-        for (size_t i = 0; i < strlen(user); ++i) {
-            hash ^= user[i];
-            hash *= 0x100000001b3ULL;
-        }
-    }
-
-    if (host) {
-        for (size_t i = 0; i < strlen(host); ++i) {
-            hash ^= host[i];
-            hash *= 0x100000001b3ULL;
+    // Mix in each variable if it exists
+    for (size_t v = 0; v < sizeof(vars) / sizeof(vars[0]); ++v) {
+        const char *val = vars[v];
+        if (val) {
+            for (size_t i = 0; val[i]; ++i) {
+                hash ^= (uint8_t)val[i];
+                hash *= 0x100000001b3ULL;
+            }
         }
     }
 
@@ -759,6 +670,94 @@ bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain) {
         if (!fossil_jellyfish_verify_block(&chain->memory[i])) return false;
     }
 
+    return true;
+}
+
+// Parses a string like: "key": "value"
+static bool match_key_value(const char **ptr, const char *key, const char *value) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    size_t klen = strlen(key);
+    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, key, klen) != 0 || strncmp(p + 1 + klen, "\":", 2) != 0)
+        return false;
+    p += klen + 3;
+    while (isspace(*p)) p++;
+    size_t vlen = strlen(value);
+    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, value, vlen) != 0 || strncmp(p + 1 + vlen, "\"", 1) != 0)
+        return false;
+    *ptr = p + vlen + 2;
+    return true;
+}
+
+static bool skip_key(const char **ptr, const char *key) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    size_t klen = strlen(key);
+    if (strncmp(p, "\"", 1) != 0 || strncmp(p + 1, key, klen) != 0 || strncmp(p + 1 + klen, "\":", 2) != 0)
+        return false;
+    *ptr = p + klen + 3;
+    return true;
+}
+
+static bool skip_symbol(const char **ptr, char symbol) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    if (*p != symbol)
+        return false;
+    *ptr = p + 1;
+    return true;
+}
+
+static bool skip_comma(const char **ptr) {
+    const char *p = *ptr;
+    while (isspace(*p)) p++;
+    if (*p == ',') {
+        *ptr = p + 1;
+        return true;
+    }
+    return false;
+}
+
+static bool parse_string_field(const char **ptr, const char *key, char *out, size_t max) {
+    if (!skip_key(ptr, key)) return false;
+    if (!skip_symbol(ptr, '"')) return false;
+
+    const char *p = *ptr;
+    size_t i = 0;
+
+    while (*p && *p != '"' && i < max - 1) {
+        if (*p == '\\' && *(p + 1)) p++; // skip escape
+        out[i++] = *p++;
+    }
+
+    if (*p != '"') return false;
+    out[i] = '\0';
+    *ptr = p + 1;
+    return true;
+}
+
+static bool parse_number_field(const char **ptr, const char *key, double *out_d, uint64_t *out_u64, int *out_i, uint32_t *out_u32) {
+    if (!skip_key(ptr, key)) return false;
+
+    char *end;
+    const char *p = *ptr;
+
+    while (isspace(*p)) p++;
+
+    if (out_d) {
+        *out_d = strtod(p, &end);
+    } else if (out_u64) {
+        *out_u64 = strtoull(p, &end, 10);
+    } else if (out_i) {
+        *out_i = strtol(p, &end, 10);
+    } else if (out_u32) {
+        *out_u32 = strtoul(p, &end, 10);
+    } else {
+        return false;
+    }
+
+    if (end == p) return false;
+    *ptr = end;
     return true;
 }
 
