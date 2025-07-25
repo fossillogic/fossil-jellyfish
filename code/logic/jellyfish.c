@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <float.h>
 #include <time.h>
 #include <math.h>
 
@@ -178,6 +179,44 @@ int parse_hex_field(const char **ptr, const char *key, uint8_t *out, size_t len)
         *ptr += 2;
     }
     return skip_symbol(ptr, '"');
+}
+
+int skip_key_value(const char **ptr, const char *key, const char *expected_value) {
+    const char *p = *ptr;
+
+    // Skip optional whitespace
+    while (isspace((unsigned char)*p)) p++;
+
+    // Match key
+    size_t key_len = strlen(key);
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    if (strncmp(p, key, key_len) != 0) return 0;
+    p += key_len;
+
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    // Skip colon and optional whitespace
+    while (isspace((unsigned char)*p)) p++;
+    if (*p != ':') return 0;
+    p++;
+    while (isspace((unsigned char)*p)) p++;
+
+    // Match expected value
+    size_t val_len = strlen(expected_value);
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    if (strncmp(p, expected_value, val_len) != 0) return 0;
+    p += val_len;
+
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    *ptr = p;  // Update pointer if match succeeded
+    return 1;
 }
 
 static bool parse_string_field(const char **ptr, const char *key, char *out, size_t max) {
@@ -612,31 +651,31 @@ const char* fossil_jellyfish_reason(fossil_jellyfish_chain *chain, const char *i
 }
 
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate) {
-    if (!chain || chain->count == 0) return;
+    if (!chain || chain->count == 0 || decay_rate <= 0.0f) return;
 
     const float MIN_CONFIDENCE = 0.05f;
     const float MAX_CONFIDENCE = 1.0f;
 
-    // Half-life of confidence in seconds (e.g. 24 hours = 86400s)
-    const double HALF_LIFE_SECONDS = 86400.0;
+    // decay_rate here represents the half-life in seconds
+    // To avoid too small or too large half-life, clamp decay_rate reasonably
+    double half_life_seconds = fmax(1.0, (double)decay_rate);
 
-    // Current time in seconds
     time_t now = time(NULL);
 
     for (size_t i = 0; i < chain->count; ++i) {
         fossil_jellyfish_block *block = &chain->memory[i];
         if (!block->valid) continue;
 
-        // Convert timestamps to seconds
-        time_t block_time = (time_t)(block->timestamp / 1000); // assuming ms
+        time_t block_time = (time_t)(block->timestamp / 1000);
         time_t age_seconds = now - block_time;
-        if (age_seconds <= 0) continue; // future or zero-age blocks aren't decayed
 
-        // Compute decay factor: confidence *= 0.5^(age / half-life)
-        double decay_factor = pow(0.5, (double)age_seconds / HALF_LIFE_SECONDS);
+        if (age_seconds <= 0) continue;
+
+        // Compute decay factor:
+        // confidence *= 0.5 ^ (age / half_life)
+        double decay_factor = pow(0.5, (double)age_seconds / half_life_seconds);
         block->confidence *= (float)decay_factor;
 
-        // Clamp and check
         block->confidence = fmaxf(0.0f, fminf(block->confidence, MAX_CONFIDENCE));
         if (block->confidence < MIN_CONFIDENCE) {
             block->valid = 0;
