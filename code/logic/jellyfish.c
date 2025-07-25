@@ -19,6 +19,7 @@
 #include <ctype.h>
 #include <time.h>
 
+
 // HASH Algorithm magic
 
 #if defined(_WIN32) || defined(_WIN64)
