@@ -127,107 +127,32 @@ uint64_t get_time_microseconds(void) {
 }
 #endif
 
-#if defined(_WIN32)
-#include <windows.h>
-#elif defined(__unix__) || defined(__APPLE__)
-#include <unistd.h>
-#include <pwd.h>
-#endif
-
-static uint64_t fnv1a_hash(const unsigned char *data, size_t len) {
+static uint64_t get_device_salt(void) {
     uint64_t hash = 0xcbf29ce484222325ULL;
-    for (size_t i = 0; i < len; ++i) {
-        hash ^= data[i];
-        hash *= 0x100000001b3ULL;
-    }
-    return hash;
-}
-
-// Try reading file contents as salt (Linux/macOS)
-static uint64_t try_read_file_salt(const char *path) {
-    FILE *fp = fopen(path, "rb");
-    if (!fp) return 0;
-    char buffer[256];
-    size_t len = fread(buffer, 1, sizeof(buffer), fp);
-    fclose(fp);
-    if (len == 0) return 0;
-    return fnv1a_hash((unsigned char *)buffer, len);
-}
-
-// Try volume serial number (Windows)
-static uint64_t try_windows_volume_serial_salt(void) {
-#if defined(_WIN32)
-    DWORD serial = 0;
-    if (GetVolumeInformationA("C:\\", NULL, 0, &serial, NULL, NULL, NULL, 0)) {
-        return fnv1a_hash((unsigned char *)&serial, sizeof(serial));
-    }
-#endif
-    return 0;
-}
-
-// Try hostname + username combo (portable)
-static uint64_t try_username_hostname_salt(void) {
-    char buffer[512];
-    buffer[0] = '\0';
-
-#if defined(_WIN32)
-    DWORD size = 256;
-    char username[256], hostname[256];
-    GetUserNameA(username, &size);
-    size = 256;
-    GetComputerNameA(hostname, &size);
-    snprintf(buffer, sizeof(buffer), "%s@%s", username, hostname);
-
-#elif defined(__unix__) || defined(__APPLE__)
-    const char *username = getlogin();
+    const char *user = getenv("USER");
+    const char *host = getenv("HOSTNAME");
     char hostname[256];
-    gethostname(hostname, sizeof(hostname));
-    snprintf(buffer, sizeof(buffer), "%s@%s", username ? username : "?", hostname);
-#endif
 
-    return fnv1a_hash((unsigned char *)buffer, strlen(buffer));
-}
-
-// Final fallback: generate + store UUID
-static uint64_t try_random_uuid_salt(void) {
-    FILE *fp = fopen(".device_salt", "rb");
-    uint64_t salt;
-    if (fp && fread(&salt, sizeof(salt), 1, fp) == 1) {
-        fclose(fp);
-        return salt;
+    if (!host) {
+        gethostname(hostname, sizeof(hostname));
+        host = hostname;
     }
 
-    // Generate new one
-    salt = ((uint64_t)rand() << 32) | rand();
-    fp = fopen(".device_salt", "wb");
-    if (fp) {
-        fwrite(&salt, sizeof(salt), 1, fp);
-        fclose(fp);
+    if (user) {
+        for (size_t i = 0; i < strlen(user); ++i) {
+            hash ^= user[i];
+            hash *= 0x100000001b3ULL;
+        }
     }
-    return salt;
-}
 
-uint64_t get_device_salt(void) {
-    uint64_t salt = 0;
-
-#if defined(__linux__) || defined(__APPLE__)
-    const char *paths[] = {
-        "/etc/machine-id",
-        "/var/lib/dbus/machine-id",
-        "/sys/class/dmi/id/product_uuid"
-    };
-    for (int i = 0; i < 3 && !salt; ++i) {
-        salt = try_read_file_salt(paths[i]);
+    if (host) {
+        for (size_t i = 0; i < strlen(host); ++i) {
+            hash ^= host[i];
+            hash *= 0x100000001b3ULL;
+        }
     }
-#endif
 
-#if defined(_WIN32)
-    if (!salt) salt = try_windows_volume_serial_salt();
-#endif
-
-    if (!salt) salt = try_username_hostname_salt();
-    if (!salt) salt = try_random_uuid_salt();
-    return salt;
+    return hash;
 }
 
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
