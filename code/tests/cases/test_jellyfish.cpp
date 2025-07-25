@@ -97,6 +97,11 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_and_load) {
     ai.learn("input1", "output1");
     ai.learn("input2", "output2");
 
+    // Set known confidence values to ensure they're saved/loaded properly
+    fossil_jellyfish_chain& chain = ai.get_chain();
+    chain.memory[0].confidence = 0.85f;
+    chain.memory[1].confidence = 0.65f;
+
     const char *filename = "test_jellyfish_save_load.jellyfish";
     bool save_result = ai.save(filename);
     ASSUME_ITS_TRUE(save_result);
@@ -104,11 +109,20 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_and_load) {
     JellyfishAI loaded;
     bool load_result = loaded.load(filename);
     ASSUME_ITS_TRUE(load_result);
+
     const fossil_jellyfish_chain& loaded_chain = loaded.get_chain();
     ASSUME_ITS_EQUAL_SIZE(loaded_chain.count, 2);
+
     ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].input, "input1");
+    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].output, "output1");
+    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].input, "input2");
     ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].output, "output2");
 
+    // Confirm confidence values persisted (within tolerance)
+    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[0].confidence - 0.85f) < 0.01f);
+    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[1].confidence - 0.65f) < 0.01f);
+
+    // Clean up
     remove(filename);
 }
 
@@ -147,14 +161,27 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_decay_confidence) {
     JellyfishAI ai;
     ai.learn("a", "b");
     fossil_jellyfish_chain& chain = ai.get_chain();
+
+    // Set up one valid block
     chain.memory[0].confidence = 1.0f;
     chain.memory[0].valid = 1;
     chain.count = 1;
 
-    ai.decay_confidence(0.5f);
-    ASSUME_ITS_TRUE(chain.memory[0].confidence < 1.0f);
-    ai.decay_confidence(0.9f);
-    ASSUME_ITS_TRUE(chain.memory[0].valid == 0 || chain.memory[0].confidence < 0.05f);
+    // Simulate old timestamp to force decay
+    time_t now = time(NULL);
+    time_t past = now - 172800; // 2 days ago (48h)
+    chain.memory[0].timestamp = (uint64_t)past * 1000; // assuming ms
+
+    ai.decay_confidence(0.0f); // decay_rate is unused but required by API
+
+    float conf = chain.memory[0].confidence;
+    int valid = chain.memory[0].valid;
+
+    // Confidence should be decayed significantly (2 half-lives)
+    ASSUME_ITS_TRUE(conf < 0.26f); // 0.5^2 = 0.25
+
+    // Should be invalidated if too low
+    ASSUME_ITS_TRUE(valid == 0 || conf < 0.05f);
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_tokenize) {
