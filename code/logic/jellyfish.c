@@ -127,111 +127,108 @@ uint64_t get_time_microseconds(void) {
 }
 #endif
 
-// Default fallback salt (FNV offset basis)
-#define DEFAULT_SALT 0xcbf29ce484222325ULL
-
-#if defined(_WIN32) || defined(_WIN64)
-// =======================
-// Windows (MinGW-safe)
-// =======================
-#include <winsock2.h>     // MUST come first
-#include <iphlpapi.h>
-#pragma comment(lib, "iphlpapi.lib")
-
-static uint64_t get_device_salt(void) {
-    uint64_t salt = DEFAULT_SALT;
-    ULONG size = 15000;
-
-    IP_ADAPTER_ADDRESSES *adapters = (IP_ADAPTER_ADDRESSES *)malloc(size);
-    if (!adapters) return salt;
-
-    if (GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST, NULL, adapters, &size) == NO_ERROR) {
-        for (IP_ADAPTER_ADDRESSES *a = adapters; a; a = a->Next) {
-            if (a->PhysicalAddressLength == 6) {
-                for (ULONG i = 0; i < 6; ++i) {
-                    salt ^= a->PhysicalAddress[i];
-                    salt *= 0x100000001b3ULL;
-                }
-                break;
-            }
-        }
-    }
-
-    free(adapters);
-    return salt;
-}
-
-#elif defined(__APPLE__) && defined(__MACH__)
-// =======================
-// macOS
-// =======================
-#include <ifaddrs.h>
-#include <net/if_dl.h>
-#include <net/if.h>
-#include <sys/socket.h>
-
-static uint64_t get_device_salt(void) {
-    uint64_t salt = DEFAULT_SALT;
-    struct ifaddrs *ifap = NULL;
-
-    if (getifaddrs(&ifap) != 0 || !ifap)
-        return salt;
-
-    for (struct ifaddrs *ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
-        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_LINK)
-            continue;
-
-        struct sockaddr_dl *sdl = (struct sockaddr_dl *)ifa->ifa_addr;
-        const unsigned char *mac = (const unsigned char *)LLADDR(sdl);
-        if (sdl->sdl_alen == 6) {
-            for (int i = 0; i < 6; ++i) {
-                salt ^= mac[i];
-                salt *= 0x100000001b3ULL;
-            }
-            break;
-        }
-    }
-
-    freeifaddrs(ifap);
-    return salt;
-}
-
-#else
-// =======================
-// Linux / BSD
-// =======================
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__unix__) || defined(__APPLE__)
 #include <unistd.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
+#include <pwd.h>
+#endif
 
-static uint64_t get_device_salt(void) {
-    uint64_t salt = DEFAULT_SALT;
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) return salt;
+static uint64_t fnv1a_hash(const unsigned char *data, size_t len) {
+    uint64_t hash = 0xcbf29ce484222325ULL;
+    for (size_t i = 0; i < len; ++i) {
+        hash ^= data[i];
+        hash *= 0x100000001b3ULL;
+    }
+    return hash;
+}
 
-    struct ifreq ifr;
-    const char *interfaces[] = { "eth0", "wlan0", "en0", "eno1" };
+// Try reading file contents as salt (Linux/macOS)
+static uint64_t try_read_file_salt(const char *path) {
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return 0;
+    char buffer[256];
+    size_t len = fread(buffer, 1, sizeof(buffer), fp);
+    fclose(fp);
+    if (len == 0) return 0;
+    return fnv1a_hash((unsigned char *)buffer, len);
+}
 
-    for (size_t i = 0; i < sizeof(interfaces)/sizeof(interfaces[0]); ++i) {
-        memset(&ifr, 0, sizeof(ifr));
-        strncpy(ifr.ifr_name, interfaces[i], sizeof(ifr.ifr_name) - 1);
+// Try volume serial number (Windows)
+static uint64_t try_windows_volume_serial_salt(void) {
+#if defined(_WIN32)
+    DWORD serial = 0;
+    if (GetVolumeInformationA("C:\\", NULL, 0, &serial, NULL, NULL, NULL, 0)) {
+        return fnv1a_hash((unsigned char *)&serial, sizeof(serial));
+    }
+#endif
+    return 0;
+}
 
-        if (ioctl(sock, 0x8927, &ifr) == 0) {  // SIOCGIFHWADDR
-            unsigned char *mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
-            for (int j = 0; j < 6; ++j) {
-                salt ^= mac[j];
-                salt *= 0x100000001b3ULL;
-            }
-            break;
-        }
+// Try hostname + username combo (portable)
+static uint64_t try_username_hostname_salt(void) {
+    char buffer[512];
+    buffer[0] = '\0';
+
+#if defined(_WIN32)
+    DWORD size = 256;
+    char username[256], hostname[256];
+    GetUserNameA(username, &size);
+    size = 256;
+    GetComputerNameA(hostname, &size);
+    snprintf(buffer, sizeof(buffer), "%s@%s", username, hostname);
+
+#elif defined(__unix__) || defined(__APPLE__)
+    const char *username = getlogin();
+    char hostname[256];
+    gethostname(hostname, sizeof(hostname));
+    snprintf(buffer, sizeof(buffer), "%s@%s", username ? username : "?", hostname);
+#endif
+
+    return fnv1a_hash((unsigned char *)buffer, strlen(buffer));
+}
+
+// Final fallback: generate + store UUID
+static uint64_t try_random_uuid_salt(void) {
+    FILE *fp = fopen(".device_salt", "rb");
+    uint64_t salt;
+    if (fp && fread(&salt, sizeof(salt), 1, fp) == 1) {
+        fclose(fp);
+        return salt;
     }
 
-    close(sock);
+    // Generate new one
+    salt = ((uint64_t)rand() << 32) | rand();
+    fp = fopen(".device_salt", "wb");
+    if (fp) {
+        fwrite(&salt, sizeof(salt), 1, fp);
+        fclose(fp);
+    }
     return salt;
 }
+
+uint64_t get_device_salt(void) {
+    uint64_t salt = 0;
+
+#if defined(__linux__) || defined(__APPLE__)
+    const char *paths[] = {
+        "/etc/machine-id",
+        "/var/lib/dbus/machine-id",
+        "/sys/class/dmi/id/product_uuid"
+    };
+    for (int i = 0; i < 3 && !salt; ++i) {
+        salt = try_read_file_salt(paths[i]);
+    }
 #endif
+
+#if defined(_WIN32)
+    if (!salt) salt = try_windows_volume_serial_salt();
+#endif
+
+    if (!salt) salt = try_username_hostname_salt();
+    if (!salt) salt = try_random_uuid_salt();
+    return salt;
+}
 
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
     const uint64_t PRIME = 0x100000001b3ULL;
