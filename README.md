@@ -6,31 +6,41 @@ Jellyfish is a lightweight, portable AI library written in pure C with no extern
 
 This file defines a **Jellyfish mindset**, mapping named personalities to model chains (`.fish` files):
 
-```meson
-# This is the primary logic bundle for TAI personality
-
-mindset('core_logic') {
-  description: 'Fundamental AI building blocks'
+```ini
+model('core_logic') {
+  description: 'Fundamental AI reasoning and logic modules'
+  tags: ['core', 'logic', 'reasoning']
+  models: ['logic.fish', 'nlp.fish', 'ethics.fish']
   priority: 1
-  models: [
-    'logic.fish',
-    'nlp.fish',
-    'ethics.fish'
-  ]
-  tags: ['core']
-  confidence_threshold: 0.5
-
-  #:bootstrap
-  #:taint-free
+  confidence_threshold: 0.75
+  activation_condition: 'always'
+  source_uri: 'https://fossillogic.ai/models/core_logic'
+  origin_device_id: '00:1A:7D:DA:71:13'
+  version: '1.0.0'
+  content_hash: 'a3f5c7d89b4e1f23a567b9d0c1e2f3456789abcdef0123456789abcdef012345'
+  created_at: 1689004800
+  updated_at: 1689091200
+  trust_score: 0.98
+  immutable: 1
+  state_machine: 'logic_state_v1'
 }
 
-# Another mindset with conditional loading
-mindset('persona_trump') {
-  description: 'Simulates Donald Trump speech pattern'
-  models: ['trump_speech.fish']
-  activation_condition: 'input contains "Trump"'
-  priority: 10
-  #:persona
+model('persona_trump') {
+  description: 'Personality model for Donald Trump simulation'
+  tags: ['persona', 'politics', 'simulation']
+  models: ['trump_brain.fish', 'debate_logic.fish']
+  priority: 5
+  confidence_threshold: 0.6
+  activation_condition: 'user_request == "trump_mode"'
+  source_uri: 'https://fossillogic.ai/models/persona_trump'
+  origin_device_id: '00:1B:44:11:3A:B7'
+  version: '2.1.4'
+  content_hash: 'b1a2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0'
+  created_at: 1689000000
+  updated_at: 1689050000
+  trust_score: 0.85
+  immutable: 0
+  state_machine: 'persona_v2'
 }
 ```
 
@@ -51,17 +61,41 @@ A `.fish` file stores learned associations (called *thought blocks*) in JSON for
     {
       "input": "fire",
       "output": "hot",
-      "timestamp": 1620000000
+      "hash": "b1946ac92492d2347c6235b4d2611184",
+      "timestamp": 1620000000,
+      "delta_ms": 0,
+      "duration_ms": 12,
+      "valid": 1,
+      "confidence": 0.98,
+      "usage_count": 5,
+      "device_id": "a1b2c3d4e5f6a7b8",
+      "signature": "00112233445566778899aabbccddeeff"
     },
     {
       "input": "ice",
       "output": "cold",
-      "timestamp": 1620001000
+      "hash": "e4da3b7fbbce2345d7772b0674a318d5",
+      "timestamp": 1620001000,
+      "delta_ms": 1000,
+      "duration_ms": 10,
+      "valid": 1,
+      "confidence": 0.95,
+      "usage_count": 3,
+      "device_id": "a1b2c3d4e5f6a7b8",
+      "signature": "00112233445566778899aabbccddeeff"
     },
     {
       "input": "wind",
       "output": "fast",
-      "timestamp": 1620002000
+      "hash": "1679091c5a880faf6fb5e6087eb1b2dc",
+      "timestamp": 1620002000,
+      "delta_ms": 1000,
+      "duration_ms": 8,
+      "valid": 1,
+      "confidence": 0.92,
+      "usage_count": 2,
+      "device_id": "a1b2c3d4e5f6a7b8",
+      "signature": "00112233445566778899aabbccddeeff"
     }
   ]
 }
@@ -105,7 +139,7 @@ To get started with Jellyfish, ensure you have the following installed:
    # ======================
    [wrap-git]
    url = https://github.com/fossillogic/fossil-jellyfish.git
-   revision = v0.1.0
+   revision = v0.1.1
 
    [provide]
    fossil-jellyfish = fossil_fish_dep

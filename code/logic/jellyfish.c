@@ -17,8 +17,113 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <float.h>
 #include <time.h>
+#include <math.h>
 
+
+// HASH Algorithm magic
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+uint64_t get_time_microseconds(void) {
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    return t / 10; // 100-nanosecond intervals to microseconds
+}
+#else
+#include <sys/time.h>
+uint64_t get_time_microseconds(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000000ULL + tv.tv_usec;
+}
+#endif
+
+static uint64_t get_device_salt(void) {
+    // FNV-1a 64-bit base offset
+    uint64_t hash = 0xcbf29ce484222325ULL;
+
+    // Cross-platform user and home detection
+#if defined(_WIN32) || defined(_WIN64)
+    const char *vars[] = {
+        getenv("USERNAME"),
+        getenv("USERPROFILE"),
+        getenv("COMPUTERNAME")
+    };
+#else
+    const char *vars[] = {
+        getenv("USER"),
+        getenv("HOME"),
+        getenv("SHELL"),
+        getenv("HOSTNAME")
+    };
+#endif
+
+    // Mix in each variable if it exists
+    for (size_t v = 0; v < sizeof(vars) / sizeof(vars[0]); ++v) {
+        const char *val = vars[v];
+        if (val) {
+            for (size_t i = 0; val[i]; ++i) {
+                hash ^= (uint8_t)val[i];
+                hash *= 0x100000001b3ULL;
+            }
+        }
+    }
+
+    return hash;
+}
+
+void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
+    const uint64_t PRIME = 0x100000001b3ULL;
+    static uint64_t SALT = 0;
+    if (SALT == 0) SALT = get_device_salt();  // Initialize salt once
+
+    uint64_t state1 = 0xcbf29ce484222325ULL ^ SALT;
+    uint64_t state2 = 0x84222325cbf29ce4ULL ^ ~SALT;
+
+    size_t in_len = strlen(input);
+    size_t out_len = strlen(output);
+
+    uint64_t nonce = get_time_microseconds();  // Microsecond resolution
+
+    for (size_t i = 0; i < in_len; ++i) {
+        state1 ^= (uint8_t)input[i];
+        state1 *= PRIME;
+        state1 ^= (state1 >> 27);
+        state1 ^= (state1 << 33);
+    }
+
+    for (size_t i = 0; i < out_len; ++i) {
+        state2 ^= (uint8_t)output[i];
+        state2 *= PRIME;
+        state2 ^= (state2 >> 29);
+        state2 ^= (state2 << 31);
+    }
+
+    // Nonce and length entropy
+    state1 ^= nonce ^ ((uint64_t)in_len << 32);
+    state2 ^= ~nonce ^ ((uint64_t)out_len << 16);
+
+    // Mixing rounds
+    for (int i = 0; i < 6; ++i) {
+        state1 += (state2 ^ (state1 >> 17));
+        state2 += (state1 ^ (state2 >> 13));
+        state1 ^= (state1 << 41);
+        state2 ^= (state2 << 37);
+        state1 *= PRIME;
+        state2 *= PRIME;
+    }
+
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
+        uint64_t mixed = (i % 2 == 0) ? state1 : state2;
+        mixed ^= (mixed >> ((i % 7) + 13));
+        mixed *= PRIME;
+        mixed ^= SALT;
+        hash_out[i] = (uint8_t)((mixed >> (8 * (i % 8))) & 0xFF);
+    }
+}
 
 // Parses a string like: "key": "value"
 static bool match_key_value(const char **ptr, const char *key, const char *value) {
@@ -65,6 +170,55 @@ static bool skip_comma(const char **ptr) {
     return false;
 }
 
+int parse_hex_field(const char **ptr, const char *key, uint8_t *out, size_t len) {
+    if (!skip_key(ptr, key) || !skip_symbol(ptr, '"')) return 0;
+    for (size_t i = 0; i < len; ++i) {
+        unsigned int val = 0;
+        if (sscanf(*ptr, "%2x", &val) != 1) return 0;
+        if (out) out[i] = (uint8_t)val;
+        *ptr += 2;
+    }
+    return skip_symbol(ptr, '"');
+}
+
+int skip_key_value(const char **ptr, const char *key, const char *expected_value) {
+    const char *p = *ptr;
+
+    // Skip optional whitespace
+    while (isspace((unsigned char)*p)) p++;
+
+    // Match key
+    size_t key_len = strlen(key);
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    if (strncmp(p, key, key_len) != 0) return 0;
+    p += key_len;
+
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    // Skip colon and optional whitespace
+    while (isspace((unsigned char)*p)) p++;
+    if (*p != ':') return 0;
+    p++;
+    while (isspace((unsigned char)*p)) p++;
+
+    // Match expected value
+    size_t val_len = strlen(expected_value);
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    if (strncmp(p, expected_value, val_len) != 0) return 0;
+    p += val_len;
+
+    if (strncmp(p, "\"", 1) != 0) return 0;
+    p++;
+
+    *ptr = p;  // Update pointer if match succeeded
+    return 1;
+}
+
 static bool parse_string_field(const char **ptr, const char *key, char *out, size_t max) {
     if (!skip_key(ptr, key)) return false;
     if (!skip_symbol(ptr, '"')) return false;
@@ -108,47 +262,8 @@ static bool parse_number_field(const char **ptr, const char *key, double *out_d,
     return true;
 }
 
-void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
-    const uint32_t FNV_PRIME = 0x01000193;
-    uint32_t hash = 0x811c9dc5;
-    size_t in_len = strlen(input);
-    size_t out_len = strlen(output);
-
-    // Mix in lengths
-    hash ^= in_len;
-    hash *= FNV_PRIME;
-    hash ^= out_len;
-    hash *= FNV_PRIME;
-
-    // Mix input
-    for (size_t i = 0; i < in_len; ++i) {
-        hash ^= (uint8_t)input[i];
-        hash *= FNV_PRIME;
-        hash ^= (hash >> 5);
-    }
-
-    // Mix output
-    for (size_t i = 0; i < out_len; ++i) {
-        hash ^= (uint8_t)output[i];
-        hash *= FNV_PRIME;
-        hash ^= (hash >> 5);
-    }
-
-    // Final mix
-    hash ^= (hash << 7);
-    hash ^= (hash >> 3);
-
-    // Spread into output
-    uint32_t h = hash;
-    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
-        h ^= (h >> 13);
-        h *= FNV_PRIME;
-        h ^= (h << 11);
-        hash_out[i] = (uint8_t)((h >> (8 * (i % 4))) & 0xFF);
-    }
-}
-
 void fossil_jellyfish_init(fossil_jellyfish_chain *chain) {
+    if (!chain) return;
     chain->count = 0;
     memset(chain->memory, 0, sizeof(chain->memory));
 }
@@ -181,9 +296,24 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, co
             block->output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
 
             block->timestamp = (uint64_t)time(NULL);
+
+            // Calculate delta_ms and duration_ms
+            uint64_t prev_ts = 0;
+            for (ssize_t j = (ssize_t)i - 1; j >= 0; --j) {
+                if (chain->memory[j].valid) {
+                    prev_ts = chain->memory[j].timestamp;
+                    break;
+                }
+            }
+            block->delta_ms = prev_ts ? (uint32_t)((block->timestamp - prev_ts) * 1000) : 0;
+            block->duration_ms = 0; // Set to 0, or measure if possible
+
             block->valid = 1;
             block->confidence = 1.0f;
             block->usage_count = 0;
+
+            memset(block->device_id, 0, FOSSIL_DEVICE_ID_SIZE);
+            memset(block->signature, 0, FOSSIL_SIGNATURE_SIZE);
 
             fossil_jellyfish_hash(input, output, block->hash);
 
@@ -206,9 +336,24 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, co
             block->output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
 
             block->timestamp = (uint64_t)time(NULL);
+
+            // Calculate delta_ms and duration_ms
+            uint64_t prev_ts = 0;
+            for (ssize_t j = (ssize_t)i - 1; j >= 0; --j) {
+                if (chain->memory[j].valid) {
+                    prev_ts = chain->memory[j].timestamp;
+                    break;
+                }
+            }
+            block->delta_ms = prev_ts ? (uint32_t)((block->timestamp - prev_ts) * 1000) : 0;
+            block->duration_ms = 0; // Set to 0, or measure if possible
+
             block->valid = 1;
             block->confidence = 1.0f;
             block->usage_count = 0;
+
+            memset(block->device_id, 0, FOSSIL_DEVICE_ID_SIZE);
+            memset(block->signature, 0, FOSSIL_SIGNATURE_SIZE);
 
             fossil_jellyfish_hash(input, output, block->hash);
 
@@ -218,41 +363,53 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, co
     }
 }
 
-const char* fossil_jellyfish_reason(fossil_jellyfish_chain *chain, const char *input) {
-    for (size_t i = 0; i < chain->count; ++i) {
-        if (chain->memory[i].valid && strncmp(chain->memory[i].input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
-            chain->memory[i].usage_count++;
-            if (chain->memory[i].confidence < 1.0f)
-                chain->memory[i].confidence += 0.05f;
-            return chain->memory[i].output;
-        }
-    }
-    return "Unknown";
-}
-
 // Removes blocks that are older and marked invalid (or just garbage collect oldest)
 void fossil_jellyfish_cleanup(fossil_jellyfish_chain *chain) {
-    size_t new_count = 0;
-    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
-        if (!chain->memory[i].valid) continue;
-        if (chain->memory[i].confidence < 0.05f) {
-            chain->memory[i].valid = 0;
+    // Remove invalid or low-confidence blocks and compact the memory array.
+    size_t dst = 0;
+    for (size_t src = 0; src < FOSSIL_JELLYFISH_MAX_MEM; ++src) {
+        fossil_jellyfish_block *block = &chain->memory[src];
+        if (block->valid && block->confidence >= 0.05f) {
+            if (dst != src) {
+                chain->memory[dst] = *block;
+            }
+            dst++;
         } else {
-            new_count++;
+            // Optionally clear the block for security/cleanliness
+            memset(block, 0, sizeof(fossil_jellyfish_block));
         }
     }
-    chain->count = new_count;
+    chain->count = dst;
 }
 
 void fossil_jellyfish_dump(const fossil_jellyfish_chain *chain) {
     for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
         printf("Block %llu:\n", (unsigned long long)i);
-        printf("  Input: %s\n", chain->memory[i].input);
-        printf("  Output: %s\n", chain->memory[i].output);
-        printf("  Time: %llu\n", (unsigned long long)chain->memory[i].timestamp);
-        printf("  Hash: ");
-        for (int j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j) {
-            printf("%02x", chain->memory[i].hash[j]);
+        printf("  Input      : %s\n", b->input);
+        printf("  Output     : %s\n", b->output);
+        printf("  Timestamp  : %llu\n", (unsigned long long)b->timestamp);
+        printf("  Delta ms   : %u\n", b->delta_ms);
+        printf("  Duration ms: %u\n", b->duration_ms);
+        printf("  Confidence : %.2f\n", b->confidence);
+        printf("  Usage Count: %u\n", b->usage_count);
+        printf("  Valid      : %d\n", b->valid);
+
+        printf("  Device ID  : ");
+        for (size_t j = 0; j < FOSSIL_DEVICE_ID_SIZE; ++j) {
+            printf("%02x", b->device_id[j]);
+        }
+        printf("\n");
+
+        printf("  Signature  : ");
+        for (size_t j = 0; j < FOSSIL_SIGNATURE_SIZE; ++j) {
+            printf("%02x", b->signature[j]);
+        }
+        printf("\n");
+
+        printf("  Hash       : ");
+        for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j) {
+            printf("%02x", b->hash[j]);
         }
         printf("\n");
     }
@@ -286,47 +443,68 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
     fclose(fp);
 
     const char *ptr = buffer;
-    if (!match_key_value(&ptr, "signature", "JFS1")) {
-        free(buffer);
-        return 0;
+    int ok = 1; // unified success flag
+
+    if (!match_key_value(&ptr, "signature", "JFS1")) ok = 0;
+    if (ok) skip_key_value(&ptr, "version", "0.1");
+
+    if (ok && (!skip_key(&ptr, "origin_device_id") || !skip_symbol(&ptr, '"'))) ok = 0;
+    if (ok) {
+        for (size_t i = 0; i < FOSSIL_DEVICE_ID_SIZE && ok; ++i) {
+            unsigned int val = 0;
+            if (sscanf(ptr, "%2x", &val) != 1) ok = 0;
+            chain->device_id[i] = (uint8_t)val;
+            ptr += 2;
+        }
+        if (!skip_symbol(&ptr, '"')) ok = 0;
     }
 
-    if (!skip_key(&ptr, "blocks") || !skip_symbol(&ptr, '[')) {
-        free(buffer);
-        return 0;
-    }
+    if (ok) ok = parse_number_field(&ptr, "created_at", NULL, &chain->created_at, NULL, NULL);
+    if (ok) ok = parse_number_field(&ptr, "updated_at", NULL, &chain->updated_at, NULL, NULL);
+
+    if (ok && (!skip_key(&ptr, "blocks") || !skip_symbol(&ptr, '['))) ok = 0;
 
     size_t count = 0;
-    while (*ptr && *ptr != ']' && count < FOSSIL_JELLYFISH_MAX_MEM) {
+    while (ok && *ptr && *ptr != ']' && count < FOSSIL_JELLYFISH_MAX_MEM) {
         fossil_jellyfish_block *b = &chain->memory[count];
         memset(b, 0, sizeof(*b));
 
-        if (!skip_symbol(&ptr, '{')) break;
-        if (!parse_string_field(&ptr, "input", b->input, sizeof(b->input))) break;
-        if (!parse_string_field(&ptr, "output", b->output, sizeof(b->output))) break;
-        if (!parse_number_field(&ptr, "timestamp", NULL, &b->timestamp, NULL, NULL)) break;
+        if (!skip_symbol(&ptr, '{')) { ok = 0; break; }
+        if (!parse_number_field(&ptr, "block_index", NULL, NULL, NULL, NULL)) { ok = 0; break; }
+        if (!parse_string_field(&ptr, "input", b->input, sizeof(b->input))) { ok = 0; break; }
+        if (!parse_string_field(&ptr, "output", b->output, sizeof(b->output))) { ok = 0; break; }
 
-        double temp_conf = 0;
-        if (!parse_number_field(&ptr, "confidence", &temp_conf, NULL, NULL, NULL)) break;
+        if (!parse_hex_field(&ptr, "hash", b->hash, FOSSIL_JELLYFISH_HASH_SIZE)) { ok = 0; break; }
+        if (!parse_hex_field(&ptr, "previous_hash", NULL, FOSSIL_JELLYFISH_HASH_SIZE)) { ok = 0; break; }
+
+        if (!parse_number_field(&ptr, "timestamp", NULL, &b->timestamp, NULL, NULL)) { ok = 0; break; }
+        if (!parse_number_field(&ptr, "delta_ms", NULL, NULL, NULL, &b->delta_ms)) { ok = 0; break; }
+        if (!parse_number_field(&ptr, "duration_ms", NULL, NULL, NULL, &b->duration_ms)) { ok = 0; break; }
+        if (!parse_number_field(&ptr, "valid", NULL, NULL, &b->valid, NULL)) { ok = 0; break; }
+
+        double temp_conf = 0.0;
+        if (!parse_number_field(&ptr, "confidence", &temp_conf, NULL, NULL, NULL)) { ok = 0; break; }
         b->confidence = (float)temp_conf;
 
-        if (!parse_number_field(&ptr, "usage_count", NULL, NULL, NULL, &b->usage_count)) break;
-        b->valid = 1;
+        if (!parse_number_field(&ptr, "usage_count", NULL, NULL, NULL, &b->usage_count)) { ok = 0; break; }
 
-        if (!skip_symbol(&ptr, '}')) break;
+        if (!parse_hex_field(&ptr, "device_id", b->device_id, FOSSIL_DEVICE_ID_SIZE)) { ok = 0; break; }
+        if (!parse_hex_field(&ptr, "signature", b->signature, FOSSIL_SIGNATURE_SIZE)) { ok = 0; break; }
+
+        if (!skip_symbol(&ptr, '}')) { ok = 0; break; }
 
         skip_comma(&ptr);
         ++count;
     }
 
-    if (!skip_symbol(&ptr, ']') || !skip_symbol(&ptr, '}')) {
-        free(buffer);
-        return 0;
+    if (ok && (!skip_symbol(&ptr, ']') || !skip_symbol(&ptr, '}'))) ok = 0;
+
+    if (ok) {
+        chain->count = count;
     }
 
-    chain->count = count;
     free(buffer);
-    return 1;
+    return ok;
 }
 
 int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filepath) {
@@ -335,11 +513,22 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
 
     fprintf(fp, "{\n");
     fprintf(fp, "  \"signature\": \"JFS1\",\n");
+    fprintf(fp, "  \"version\": \"1.0.0\",\n");
+
+    // Write origin_device_id as hex
+    fprintf(fp, "  \"origin_device_id\": \"");
+    for (size_t i = 0; i < FOSSIL_DEVICE_ID_SIZE; ++i)
+        fprintf(fp, "%02x", chain->device_id[i]);
+    fprintf(fp, "\",\n");
+
+    fprintf(fp, "  \"created_at\": %" PRIu64 ",\n", chain->created_at);
+    fprintf(fp, "  \"updated_at\": %" PRIu64 ",\n", chain->updated_at);
     fprintf(fp, "  \"blocks\": [\n");
 
     for (size_t i = 0; i < chain->count; ++i) {
         const fossil_jellyfish_block *b = &chain->memory[i];
 
+        // Escape input/output strings
         char input_escaped[2 * FOSSIL_JELLYFISH_INPUT_SIZE] = {0};
         char output_escaped[2 * FOSSIL_JELLYFISH_OUTPUT_SIZE] = {0};
 
@@ -358,139 +547,140 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
         *dst = '\0';
 
         fprintf(fp, "    {\n");
+        fprintf(fp, "      \"block_index\": %llu,\n", (unsigned long long)i);
         fprintf(fp, "      \"input\": \"%s\",\n", input_escaped);
         fprintf(fp, "      \"output\": \"%s\",\n", output_escaped);
+
+        // hash
+        fprintf(fp, "      \"hash\": \"");
+        for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j)
+            fprintf(fp, "%02x", b->hash[j]);
+        fprintf(fp, "\",\n");
+
+        // previous_hash
+        fprintf(fp, "      \"previous_hash\": \"");
+        if (i > 0) {
+            for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j)
+                fprintf(fp, "%02x", chain->memory[i - 1].hash[j]);
+        } else {
+            fprintf(fp, "00000000000000000000000000000000");
+        }
+        fprintf(fp, "\",\n");
+
+        // timestamps and timing
         fprintf(fp, "      \"timestamp\": %" PRIu64 ",\n", b->timestamp);
+        fprintf(fp, "      \"delta_ms\": %" PRIu32 ",\n", b->delta_ms);
+        fprintf(fp, "      \"duration_ms\": %" PRIu32 ",\n", b->duration_ms);
+
+        // metrics
+        fprintf(fp, "      \"valid\": %d,\n", b->valid);
         fprintf(fp, "      \"confidence\": %.6f,\n", b->confidence);
-        fprintf(fp, "      \"usage_count\": %" PRIu32 "\n", b->usage_count);
+        fprintf(fp, "      \"usage_count\": %" PRIu32 ",\n", b->usage_count);
+
+        // device_id
+        fprintf(fp, "      \"device_id\": \"");
+        for (size_t j = 0; j < FOSSIL_DEVICE_ID_SIZE; ++j)
+            fprintf(fp, "%02x", b->device_id[j]);
+        fprintf(fp, "\",\n");
+
+        // signature
+        fprintf(fp, "      \"signature\": \"");
+        for (size_t j = 0; j < FOSSIL_SIGNATURE_SIZE; ++j)
+            fprintf(fp, "%02x", b->signature[j]);
+        fprintf(fp, "\"\n");
+
         fprintf(fp, "    }%s\n", (i < chain->count - 1) ? "," : "");
     }
 
     fprintf(fp, "  ]\n");
     fprintf(fp, "}\n");
-
     fclose(fp);
     return 1;
 }
 
 static int fossil_jellyfish_similarity(const char *a, const char *b) {
-    int cost = 0;
+    if (!a || !b) return -1; // invalid input
+
     size_t i = 0, j = 0;
+    int cost = 0;
 
     while (a[i] && b[j]) {
-        char ac = a[i];
-        char bc = b[j];
+        char ac = tolower((unsigned char)a[i]);
+        char bc = tolower((unsigned char)b[j]);
 
-        // case-insensitive match
-        if (ac >= 'A' && ac <= 'Z') ac += 32;
-        if (bc >= 'A' && bc <= 'Z') bc += 32;
-
-        if (ac != bc) {
-            cost++;
-        }
+        if (ac != bc) cost++;
         i++;
         j++;
     }
 
-    // Penalty for remaining characters
-    while (a[i++]) cost++;
-    while (b[j++]) cost++;
+    // Add cost for leftover characters
+    cost += (int)strlen(a + i);
+    cost += (int)strlen(b + j);
 
     return cost;
 }
 
-const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const char *input) {
+const char* fossil_jellyfish_reason(fossil_jellyfish_chain *chain, const char *input) {
+    // Try exact match first
+    for (size_t i = 0; i < chain->count; ++i) {
+        if (chain->memory[i].valid && strncmp(chain->memory[i].input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
+            chain->memory[i].usage_count++;
+            if (chain->memory[i].confidence < 1.0f)
+                chain->memory[i].confidence += 0.05f;
+            return chain->memory[i].output;
+        }
+    }
+
+    // Fuzzy match fallback
     int best_score = 1000;
     const char *best_output = "Unknown";
-
     for (size_t i = 0; i < chain->count; ++i) {
         if (!chain->memory[i].valid) continue;
-
         int score = fossil_jellyfish_similarity(input, chain->memory[i].input);
-        if (score == 0) return chain->memory[i].output; // Exact match
+        if (score == 0) return chain->memory[i].output; // Exact match (shouldn't happen here)
         if (score < best_score) {
             best_score = score;
             best_output = chain->memory[i].output;
         }
     }
-
-    // impose a fuzzy threshold
+    // Impose a fuzzy threshold
     if (best_score > (int)(strlen(input) / 2)) {
         return "Unknown";
     }
-
     return best_output;
 }
 
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate) {
+    if (!chain || chain->count == 0 || decay_rate <= 0.0f) return;
+
     const float MIN_CONFIDENCE = 0.05f;
+    const float MAX_CONFIDENCE = 1.0f;
+
+    // decay_rate here represents the half-life in seconds
+    // To avoid too small or too large half-life, clamp decay_rate reasonably
+    double half_life_seconds = fmax(1.0, (double)decay_rate);
+
+    time_t now = time(NULL);
 
     for (size_t i = 0; i < chain->count; ++i) {
-        if (!chain->memory[i].valid) continue;
+        fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) continue;
 
-        // Apply exponential decay
-        chain->memory[i].confidence *= (1.0f - decay_rate);
+        time_t block_time = (time_t)(block->timestamp / 1000);
+        time_t age_seconds = now - block_time;
 
-        // Clamp to zero
-        if (chain->memory[i].confidence < 0.0f) {
-            chain->memory[i].confidence = 0.0f;
-        }
+        if (age_seconds <= 0) continue;
 
-        // Invalidate if confidence too low
-        if (chain->memory[i].confidence < MIN_CONFIDENCE) {
-            chain->memory[i].valid = 0;
-        }
-    }
-}
+        // Compute decay factor:
+        // confidence *= 0.5 ^ (age / half_life)
+        double decay_factor = pow(0.5, (double)age_seconds / half_life_seconds);
+        block->confidence *= (float)decay_factor;
 
-const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const char *input, int depth) {
-    const char *current = input;
-    const char *last_valid = input;
-
-    for (int i = 0; i < depth; ++i) {
-        const char *next = fossil_jellyfish_reason_fuzzy(chain, current);
-
-        if (strcmp(next, "Unknown") == 0 || strcmp(next, current) == 0) {
-            break;
-        }
-
-        last_valid = next;
-        current = next;
-    }
-
-    return last_valid;
-}
-
-int fossil_jellyfish_mind_load_model(fossil_jellyfish_mind *mind, const char *filepath, const char *name) {
-    if (mind->model_count >= FOSSIL_JELLYFISH_MAX_MODELS) return 0;
-
-    fossil_jellyfish_chain *target = &mind->models[mind->model_count];
-    if (!fossil_jellyfish_load(target, filepath)) return 0;
-
-    strncpy(mind->model_names[mind->model_count], name, 63);
-    mind->model_names[mind->model_count][63] = '\0';
-    mind->model_count++;
-    return 1;
-}
-
-const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char *input) {
-    const char *best_output = "Unknown";
-    float best_confidence = 0.0f;
-
-    for (size_t i = 0; i < mind->model_count; ++i) {
-        fossil_jellyfish_chain *model = &mind->models[i];
-        for (size_t j = 0; j < model->count; ++j) {
-            fossil_jellyfish_block *b = &model->memory[j];
-            if (!b->valid) continue;
-            if (strncmp(b->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
-                if (b->confidence > best_confidence) {
-                    best_output = b->output;
-                    best_confidence = b->confidence;
-                }
-            }
+        block->confidence = fmaxf(0.0f, fminf(block->confidence, MAX_CONFIDENCE));
+        if (block->confidence < MIN_CONFIDENCE) {
+            block->valid = 0;
         }
     }
-    return best_output;
 }
 
 size_t fossil_jellyfish_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens) {
@@ -500,13 +690,13 @@ size_t fossil_jellyfish_tokenize(const char *input, char tokens[][FOSSIL_JELLYFI
 
     while (i < len && token_count < max_tokens) {
         // Skip leading non-alphanum
-        while (i < len && !isalnum(input[i])) i++;
+        while (i < len && !isalnum((unsigned char)input[i])) i++;
         if (i >= len) break;
 
         // Extract token
         size_t t = 0;
-        while (i < len && isalnum(input[i]) && t < FOSSIL_JELLYFISH_TOKEN_SIZE - 1) {
-            tokens[token_count][t++] = tolower(input[i++]);
+        while (i < len && isalnum((unsigned char)input[i]) && t < FOSSIL_JELLYFISH_TOKEN_SIZE - 1) {
+            tokens[token_count][t++] = (char)tolower((unsigned char)input[i++]);
         }
         tokens[token_count][t] = '\0';
         token_count++;
@@ -532,11 +722,31 @@ const fossil_jellyfish_block *fossil_jellyfish_best_memory(const fossil_jellyfis
 }
 
 float fossil_jellyfish_knowledge_coverage(const fossil_jellyfish_chain *chain) {
-    if (chain->count == 0) return 0.0f;
+    if (!chain || chain->count == 0) return 0.0f;
 
     size_t valid = 0;
     for (size_t i = 0; i < chain->count; ++i) {
-        if (chain->memory[i].valid) valid++;
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        // - valid flag is set
+        if (!b->valid) continue;
+        // - input and output are non-empty
+        if (b->input[0] == '\0' || b->output[0] == '\0') continue;
+        // - hash is not all zero
+        int hash_nonzero = 0;
+        for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j)
+            if (b->hash[j]) { hash_nonzero = 1; break; }
+        if (!hash_nonzero) continue;
+        // - device_id and signature are not all zero
+        int dev_nonzero = 0, sig_nonzero = 0;
+        for (size_t j = 0; j < FOSSIL_DEVICE_ID_SIZE; ++j)
+            if (b->device_id[j]) { dev_nonzero = 1; break; }
+        for (size_t j = 0; j < FOSSIL_SIGNATURE_SIZE; ++j)
+            if (b->signature[j]) { sig_nonzero = 1; break; }
+        if (!dev_nonzero || !sig_nonzero) continue;
+        // Optionally, check timestamp for sanity
+        if (b->timestamp == 0) continue;
+
+        valid++;
     }
 
     return (float)valid / (float)chain->count;
@@ -547,7 +757,9 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
         const fossil_jellyfish_block *b = &chain->memory[i];
         if (!b->valid) continue;
         if (strncmp(b->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
+            // Check for conflicting output
             if (strncmp(b->output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE) != 0) {
+                // Optionally, could also check device_id, signature, or other fields for more nuanced conflict detection
                 return 1; // conflicting output
             }
         }
@@ -563,135 +775,184 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
     const fossil_jellyfish_block *best = fossil_jellyfish_best_memory(chain);
     if (best) {
         printf("Strongest Memory:\n");
-        printf("  Input : %s\n", best->input);
-        printf("  Output: %s\n", best->output);
-        printf("  Confidence: %.2f\n", best->confidence);
+        printf("  Input      : %s\n", best->input);
+        printf("  Output     : %s\n", best->output);
+        printf("  Confidence : %.2f\n", best->confidence);
         printf("  Usage Count: %u\n", best->usage_count);
+        printf("  Timestamp  : %" PRIu64 "\n", best->timestamp);
+        printf("  Delta ms   : %u\n", best->delta_ms);
+        printf("  Duration ms: %u\n", best->duration_ms);
+
+        printf("  Device ID  : ");
+        for (size_t i = 0; i < FOSSIL_DEVICE_ID_SIZE; ++i) {
+            printf("%02x", best->device_id[i]);
+        }
+        printf("\n");
+
+        printf("  Signature  : ");
+        for (size_t i = 0; i < FOSSIL_SIGNATURE_SIZE; ++i) {
+            printf("%02x", best->signature[i]);
+        }
+        printf("\n");
+
+        printf("  Hash       : ");
+        for (int j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j) {
+            printf("%02x", best->hash[j]);
+        }
+        printf("\n");
     } else {
         printf("No confident memories yet.\n");
     }
     printf("================================\n");
 }
 
-static void strip_quotes(char *str) {
-    size_t len = strlen(str);
-    if (len >= 2 && (str[0] == '\'' || str[0] == '"') && str[len - 1] == str[0]) {
-        memmove(str, str + 1, len - 2);
-        str[len - 2] = '\0';
+bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block) {
+    if (!block) return false;
+
+    // Check input and output validity
+    if (strlen(block->input) == 0 || strlen(block->output) == 0) return false;
+
+    // Check hash validity (simple example: all zeros is invalid)
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; i++) {
+        if (block->hash[i] != 0) break;
+        if (i == FOSSIL_JELLYFISH_HASH_SIZE - 1) return false;
     }
+
+    return true;
 }
 
-int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_mindset *out_mindsets, int max_mindsets) {
+bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain) {
+    if (!chain) return false;
+
+    // Check each block in the chain
+    for (size_t i = 0; i < chain->count; i++) {
+        if (!fossil_jellyfish_verify_block(&chain->memory[i])) return false;
+    }
+
+    return true;
+}
+
+/**
+ * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts models.
+ *
+ * @param filepath     Path to the .jellyfish file.
+ * @param out_models   Array to store parsed models.
+ * @param max_models   Maximum number of models to store.
+ * @return             Number of models parsed, or 0 on failure.
+ */
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_models) {
+    if (!filepath || !out || max_models <= 0) return 0;
+
     FILE *fp = fopen(filepath, "r");
     if (!fp) return 0;
 
-    char line[512];
-    fossil_jellyfish_mindset *current = NULL;
-    int mindset_count = 0;
+    char line[1024];
+    int model_count = 0;
+    fossil_jellyfish_jellydsl *current = NULL;
+    int in_model = 0;
 
     while (fgets(line, sizeof(line), fp)) {
         char *trim = line;
-        while (*trim && isspace(*trim)) trim++;
+        while (isspace(*trim)) ++trim;
+        size_t len = strlen(trim);
+        while (len > 0 && (trim[len - 1] == '\n' || trim[len - 1] == '\r')) trim[--len] = 0;
 
-        // Skip blank lines
-        if (*trim == '\0' || *trim == '\n') continue;
+        // Start of a new model block
+        if (strncmp(trim, "model(", 6) == 0) {
+            if (model_count >= max_models) break;
+            current = &out[model_count++];
+            memset(current, 0, sizeof(*current));
 
-        // Handle comments (lines starting with #, excluding logic tags)
-        if (*trim == '#' && trim[1] != ':') continue;
-
-        // Handle logic tags like #:taint-check or #:bootstrap
-        if (strncmp(trim, "#:", 2) == 0 && current) {
-            char tag[64] = {0};
-            sscanf(trim + 2, "%63s", tag);  // Skip "#:"
-            if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
-                strncpy(current->tags[current->tag_count++], tag, 63);
+            char *start = strchr(trim, '\'');
+            char *end = start ? strchr(start + 1, '\'') : NULL;
+            if (start && end && (size_t)(end - start - 1) < sizeof(current->name)) {
+                strncpy(current->name, start + 1, end - start - 1);
+                current->name[end - start - 1] = '\0';
             }
+
+            in_model = 1;
             continue;
         }
 
-        if (strncmp(trim, "mindset(", 8) == 0) {
-            if (mindset_count >= max_mindsets) break;
-            current = &out_mindsets[mindset_count++];
-            memset(current, 0, sizeof(fossil_jellyfish_mindset));
+        if (!in_model || !current) continue;
 
-            char *start = strchr(trim, '(') + 1;
-            char *end = strchr(start, ')');
-            if (start && end) {
-                *end = '\0';
-                strncpy(current->name, start, sizeof(current->name) - 1);
-                strip_quotes(current->name);
-            }
+        // End of model block
+        if (strchr(trim, '}')) {
+            in_model = 0;
+            continue;
         }
-        else if (current && strstr(trim, "description:")) {
-            sscanf(trim, "description: %[^\n]", current->description);
-            strip_quotes(current->description);
-        }
-        else if (current && strstr(trim, "priority:")) {
-            sscanf(trim, "priority: %d", &current->priority);
-        }
-        else if (current && strstr(trim, "confidence_threshold:")) {
-            sscanf(trim, "confidence_threshold: %f", &current->confidence_threshold);
-        }
-        else if (current && strstr(trim, "activation_condition:")) {
-            sscanf(trim, "activation_condition: %[^\n]", current->activation_condition);
-            strip_quotes(current->activation_condition);
-        }
-        else if (current && strstr(trim, "models: [")) {
-            char *p = strchr(trim, '[') + 1;
-            while (p && *p && *p != ']') {
-                char model[256] = {0};
-                sscanf(p, "%[^,\n]", model);
-                strip_quotes(model);
-                if (strlen(model) > 0 && current->model_count < FOSSIL_JELLYFISH_MAX_MODEL_FILES) {
-                    strncpy(current->model_files[current->model_count++], model, 255);
+
+        // Handle key:value lines
+        char *colon = strchr(trim, ':');
+        if (!colon) continue;
+
+        *colon = '\0';
+        char *key = trim;
+        char *value = colon + 1;
+        while (isspace(*value)) value++;
+
+        // Trim quotes from value
+        if (*value == '\'' || *value == '"') value++;
+        char *quote_end = strrchr(value, '\'');
+        if (!quote_end) quote_end = strrchr(value, '"');
+        if (quote_end) *quote_end = '\0';
+
+        // Parse specific fields
+        if (strcmp(key, "description") == 0) {
+            strncpy(current->description, value, sizeof(current->description) - 1);
+        } else if (strcmp(key, "activation_condition") == 0) {
+            strncpy(current->activation_condition, value, sizeof(current->activation_condition) - 1);
+        } else if (strcmp(key, "source_uri") == 0) {
+            strncpy(current->source_uri, value, sizeof(current->source_uri) - 1);
+        } else if (strcmp(key, "origin_device_id") == 0) {
+            strncpy(current->origin_device_id, value, sizeof(current->origin_device_id) - 1);
+        } else if (strcmp(key, "version") == 0) {
+            strncpy(current->version, value, sizeof(current->version) - 1);
+        } else if (strcmp(key, "content_hash") == 0) {
+            strncpy(current->content_hash, value, sizeof(current->content_hash) - 1);
+        } else if (strcmp(key, "state_machine") == 0) {
+            strncpy(current->state_machine, value, sizeof(current->state_machine) - 1);
+        } else if (strcmp(key, "created_at") == 0) {
+            current->created_at = (uint64_t)atoll(value);
+        } else if (strcmp(key, "updated_at") == 0) {
+            current->updated_at = (uint64_t)atoll(value);
+        } else if (strcmp(key, "trust_score") == 0) {
+            current->trust_score = strtof(value, NULL);
+        } else if (strcmp(key, "immutable") == 0) {
+            current->immutable = atoi(value);
+        } else if (strcmp(key, "priority") == 0) {
+            current->priority = atoi(value);
+        } else if (strcmp(key, "confidence_threshold") == 0) {
+            current->confidence_threshold = strtof(value, NULL);
+        } else if (strcmp(key, "tags") == 0) {
+            char *tag = strchr(line, '[');
+            if (tag) {
+                tag++;
+                char *tok = strtok(tag, ",]");
+                while (tok && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
+                    while (*tok == ' ' || *tok == '\'' || *tok == '"') tok++;
+                    char *end = tok + strlen(tok) - 1;
+                    while (end > tok && (*end == '\'' || *end == '"' || *end == ' ')) *end-- = '\0';
+                    strncpy(current->tags[current->tag_count++], tok, 31);
+                    tok = strtok(NULL, ",]");
                 }
-                p = strchr(p, ',');
-                if (p) p++;
             }
-        }
-        else if (current && strstr(trim, "tags: [")) {
-            char *p = strchr(trim, '[') + 1;
-            while (p && *p && *p != ']') {
-                char tag[64] = {0};
-                sscanf(p, "%[^,\n]", tag);
-                strip_quotes(tag);
-                if (strlen(tag) > 0 && current->tag_count < FOSSIL_JELLYFISH_MAX_TAGS) {
-                    strncpy(current->tags[current->tag_count++], tag, 63);
+        } else if (strcmp(key, "models") == 0) {
+            char *mod = strchr(line, '[');
+            if (mod) {
+                mod++;
+                char *tok = strtok(mod, ",]");
+                while (tok && current->model_count < FOSSIL_JELLYFISH_MAX_MODELS) {
+                    while (*tok == ' ' || *tok == '\'' || *tok == '"') tok++;
+                    char *end = tok + strlen(tok) - 1;
+                    while (end > tok && (*end == '\'' || *end == '"' || *end == ' ')) *end-- = '\0';
+                    strncpy(current->models[current->model_count++], tok, 31);
+                    tok = strtok(NULL, ",]");
                 }
-                p = strchr(p, ',');
-                if (p) p++;
             }
         }
     }
 
     fclose(fp);
-    return mindset_count;
-}
-
-int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset) {
-    if (strlen(mindset->name) == 0) return 0;
-    if (mindset->model_count == 0) return 0;
-    for (int i = 0; i < mindset->model_count; ++i) {
-        if (strstr(mindset->model_files[i], ".fish") == NULL) return 0;
-    }
-    return 1;
-}
-
-int fossil_jellyfish_load_mindset_file(const char *filepath, fossil_jellyfish_mind *mind) {
-    fossil_jellyfish_mindset sets[16];
-    int count = fossil_jellyfish_parse_jellyfish_file(filepath, sets, 16);
-    if (count <= 0) return 0;
-
-    for (int i = 0; i < count; ++i) {
-        if (!fossil_jellyfish_validate_mindset(&sets[i])) continue;
-        for (int j = 0; j < sets[i].model_count; ++j) {
-            if (mind->model_count >= FOSSIL_JELLYFISH_MAX_MODELS) break;
-            if (fossil_jellyfish_load(&mind->models[mind->model_count], sets[i].model_files[j]) == 0) {
-                strncpy(mind->model_names[mind->model_count], sets[i].model_files[j], 63);
-                mind->model_count++;
-            }
-        }
-    }
-
-    return 1;
+    return model_count;
 }

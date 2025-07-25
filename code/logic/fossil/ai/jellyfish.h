@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <sys/types.h>
 
 enum {
     FOSSIL_JELLYFISH_MAX_MEM          = 128,
@@ -29,6 +30,9 @@ enum {
     FOSSIL_JELLYFISH_MAX_MODEL_FILES  = 16,
     FOSSIL_JELLYFISH_MAX_TAGS         = 8
 };
+
+#define FOSSIL_DEVICE_ID_SIZE      16   // E.g., 128-bit hardware ID
+#define FOSSIL_SIGNATURE_SIZE      64   // ECDSA, ED25519, etc.
 
 #ifdef __cplusplus
 extern "C"
@@ -47,10 +51,15 @@ typedef struct {
     char input[FOSSIL_JELLYFISH_INPUT_SIZE];
     char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];
     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];
-    uint64_t timestamp;
+    uint64_t timestamp;               // Absolute UNIX timestamp
+    uint32_t delta_ms;                // New: time since last block in ms
+    uint32_t duration_ms;             // New: time taken to process this block
     int valid;
-    float confidence;   // New: how trusted this block is (0.0 - 1.0)
-    uint32_t usage_count; // New: how often it's used
+    float confidence;
+    uint32_t usage_count;
+
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];
+    uint8_t signature[FOSSIL_SIGNATURE_SIZE];
 } fossil_jellyfish_block;
 
 /**
@@ -60,25 +69,40 @@ typedef struct {
 typedef struct {
     fossil_jellyfish_block memory[FOSSIL_JELLYFISH_MAX_MEM];
     size_t count;
+
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];  // ← Needed for file I/O
+    uint64_t created_at;                       // ← Timestamp when this chain was created
+    uint64_t updated_at;                       // ← Timestamp when it was last updated
 } fossil_jellyfish_chain;
 
+/**
+ * Represents a parsed JellyDSL structure for describing AI mindsets or knowledge.
+ * This structure is used to represent one complete mindset, including metadata,
+ * activation logic, provenance, memory chain, trust settings, and more.
+ *
+ * Designed to support the Truthful Intelligence (TI) framework.
+ */
 typedef struct {
-    char name[64];
-    char description[256];
-    char model_files[FOSSIL_JELLYFISH_MAX_MODEL_FILES][256];
-    int model_count;
-    float confidence_threshold;
-    int priority;
-    char activation_condition[256];
-    char tags[FOSSIL_JELLYFISH_MAX_TAGS][64];
-    int tag_count;
-} fossil_jellyfish_mindset;
-
-typedef struct {
-    fossil_jellyfish_chain models[FOSSIL_JELLYFISH_MAX_MODELS];
-    char model_names[FOSSIL_JELLYFISH_MAX_MODELS][64];
-    size_t model_count;
-} fossil_jellyfish_mind;
+    char name[64];                                      // Name of the model
+    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Tags for categorization
+    size_t tag_count;                                   // Number of tags
+    char description[256];                              // Description or notes
+    fossil_jellyfish_chain chain;                       // Associated memory chain
+    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // List of model filenames
+    int priority;                                       // Processing priority
+    float confidence_threshold;                         // Confidence threshold
+    int model_count;                                    // Number of models
+    char activation_condition[128];                     // Optional logic to activate
+    char source_uri[256];                               // Source reference for provenance
+    char origin_device_id[64];                          // Device ID that originated the model
+    char version[32];                                   // Version string
+    char content_hash[64];                              // Integrity hash
+    uint64_t created_at;                                // Timestamp of creation
+    uint64_t updated_at;                                // Last update timestamp
+    float trust_score;                                  // Trust score (0.0 - 1.0)
+    int immutable;                                      // Nonzero = model cannot change
+    char state_machine[128];                            // Optional state machine ref
+} fossil_jellyfish_jellydsl;
 
 // *****************************************************************************
 // Function prototypes
@@ -159,28 +183,6 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
 int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath);
 
 /**
- * Fuzzy reasoning for jellyfish AI.
- * This function attempts to find a close match for the input string
- * and returns the corresponding output if found.
- * 
- * @param chain Pointer to the jellyfish chain.
- * @param input The input string to reason about.
- * @return The output string if a close match is found, or "Unknown" if not found.
- */
-const char* fossil_jellyfish_reason_fuzzy(fossil_jellyfish_chain *chain, const char *input);
-
-/**
- * Get the reason chain for a given input.
- * This function provides a detailed explanation of how the AI arrived at its reasoning.
- * 
- * @param chain Pointer to the jellyfish chain.
- * @param input The input string to reason about.
- * @param depth The depth of reasoning to explore (0 for no depth).
- * @return A string explaining the reasoning process, or "Unknown" if not found.
- */
-const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const char *input, int depth);
-
-/**
  * Decay the confidence of the jellyfish chain.
  * This reduces the confidence of all blocks in the chain by a specified decay rate.
  * 
@@ -188,25 +190,6 @@ const char* fossil_jellyfish_reason_chain(fossil_jellyfish_chain *chain, const c
  * @param decay_rate The rate at which to decay confidence (0.0 - 1.0).
  */
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain *chain, float decay_rate);
-
-/**
- * Loads a named memory model from a file into the specified mind.
- *
- * @param mind      Pointer to the target mind structure.
- * @param filepath  Path to the .fish or binary model file.
- * @param name      Name to associate with the loaded model.
- * @return          1 if successful, 0 on failure.
- */
-int fossil_jellyfish_mind_load_model(fossil_jellyfish_mind *mind, const char *filepath, const char *name);
-
-/**
- * Performs reasoning using the mind's active memory chain.
- *
- * @param mind   Pointer to the mind structure.
- * @param input  Input question or statement to reason about.
- * @return       Output string representing the closest known answer or reasoning result.
- */
-const char* fossil_jellyfish_mind_reason(fossil_jellyfish_mind *mind, const char *input);
 
 /**
  * Tokenizes a given input string into lowercase word tokens.
@@ -253,32 +236,32 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
 
 /**
- * Parses a .jellyfish file and extracts all mindset blocks.
+ * Verifies the integrity of a jellyfish block.
+ * This checks if the block has valid input, output, and hash.
+ * 
+ * @param block Pointer to the jellyfish block to verify.
+ * @return True if the block is valid, false otherwise.
+ */
+bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block);
+
+/**
+ * Verifies the integrity of a jellyfish chain.
+ * This checks if all blocks are valid and properly linked.
+ * 
+ * @param chain Pointer to the jellyfish chain to verify.
+ * @return True if the chain is valid, false otherwise.
+ */
+bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain);
+
+/**
+ * Parses a .jellyfish file and extracts mindsets.
  * 
  * @param filepath       Path to the .jellyfish file.
  * @param out_mindsets   Array to store parsed mindsets.
  * @param max_mindsets   Maximum number of mindsets to store.
  * @return               Number of mindsets parsed, or 0 on failure.
  */
-int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_mindset *out_mindsets, int max_mindsets);
-
-/**
- * Validates a given mindset for correctness.
- * 
- * @param mindset   Pointer to the mindset to validate.
- * @return          1 if the mindset is valid, 0 if invalid.
- */
-int fossil_jellyfish_validate_mindset(const fossil_jellyfish_mindset *mindset);
-
-/**
- * Loads all valid .fish model files referenced in a .jellyfish file
- * into a target fossil_jellyfish_mind structure.
- * 
- * @param filepath   Path to the .jellyfish DSL file.
- * @param mind       Pointer to the mind structure to populate.
- * @return           1 if loading was successful, 0 if an error occurred.
- */
-int fossil_jellyfish_load_mindset_file(const char *filepath, fossil_jellyfish_mind *mind);
+int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_chains);
 
 #ifdef __cplusplus
 }
@@ -293,239 +276,139 @@ namespace ai {
     // C++ wrapper for the jellyfish AI
     class JellyfishAI {
     public:
-        /**
-         * Constructor for JellyfishAI.
-         * Initializes the jellyfish chain.
-         */
-        JellyfishAI() {
-            fossil_jellyfish_init(&chain);
-        }
+        // Constructor and destructor
+        JellyfishAI() { fossil_jellyfish_init(&chain_); }
 
-        /**
-         * Destructor for JellyfishAI.
-         * Cleans up the jellyfish chain.
-         */
-        ~JellyfishAI() {
-            cleanup();
-        }
+        // Disable copy and move semantics
+        ~JellyfishAI() {}
 
         /**
          * Learn a new input-output pair.
-         * This adds a new block to the chain with the given input and output.
-         *
+         * 
          * @param input The input string to learn.
          * @param output The output string corresponding to the input.
          */
-        void learn(const std::string &input, const std::string &output) {
-            fossil_jellyfish_learn(&chain, input.c_str(), output.c_str());
+        void learn(const char* input, const char* output) {
+            fossil_jellyfish_learn(&chain_, input, output);
         }
 
         /**
-         * Reason about an input.
-         * This searches the chain for a matching input and returns the corresponding output.
-         *
+         * Get a reasoned response for a given input.
+         * 
          * @param input The input string to reason about.
-         * @return The output string if found, or "Unknown" if not found.
+         * @return The output string corresponding to the input.
          */
-        std::string reason(const std::string &input) {
-            const char *result = fossil_jellyfish_reason(&chain, input.c_str());
-            return std::string(result);
+        std::string reason(const char* input) {
+            const char* result = fossil_jellyfish_reason(&chain_, input);
+            return std::string(result ? result : "Unknown");
         }
 
         /**
-         * Cleanup the jellyfish chain.
-         * This removes old or invalid blocks from the chain to reclaim space.
+         * Initialize the jellyfish AI.
+         */
+        void init() {
+            fossil_jellyfish_init(&chain_);
+        }
+
+        /**
+         * Cleanup the jellyfish AI.
          */
         void cleanup() {
-            fossil_jellyfish_cleanup(&chain);
+            fossil_jellyfish_cleanup(&chain_);
         }
 
         /**
-         * Dump the contents of the jellyfish chain.
-         * This prints the current state of the chain to standard output.
+         * Dump the current state of the jellyfish AI.
          */
         void dump() const {
-            fossil_jellyfish_dump(&chain);
+            fossil_jellyfish_dump(&chain_);
         }
 
         /**
-         * Generate a hash for the given input and output.
-         * This computes a hash based on the input and output strings.
-         *
-         * @param input The input string to hash.
-         * @param output The output string to hash.
-         * @param hash_out Reference to a vector where the resulting hash will be stored.
+         * Save the current state of the jellyfish AI to a file.
+         * 
+         * @param filepath The path to the file to save to.
+         * @return True if the save was successful, false otherwise.
          */
-        void hash(const std::string &input, const std::string &output, std::vector<uint8_t> &hash_out) {
-            hash_out.resize(FOSSIL_JELLYFISH_HASH_SIZE);
-            fossil_jellyfish_hash(input.c_str(), output.c_str(), hash_out.data());
+        bool save(const char* filepath) const {
+            return fossil_jellyfish_save(&chain_, filepath) == 0;
         }
 
         /**
-         * Get the underlying jellyfish chain.
-         * This provides access to the raw chain data.
-         *
-         * @return Reference to the jellyfish chain.
+         * Load the jellyfish AI state from a file.
+         * 
+         * @param filepath The path to the file to load from.
+         * @return True if the load was successful, false otherwise.
          */
-        const fossil_jellyfish_chain& get_chain() const {
-            return chain;
+        bool load(const char* filepath) {
+            return fossil_jellyfish_load(&chain_, filepath) == 0;
         }
 
         /**
-         * Reset the jellyfish chain.
-         * This reinitializes the chain to its default state.
-         */
-        void reset() {
-            fossil_jellyfish_init(&chain);
-        }
-
-        /**
-         * Fuzzy reasoning for jellyfish AI.
-         * This function attempts to find a close match for the input string
-         * and returns the corresponding output if found.
-         *
-         * @param input The input string to reason about.
-         * @return The output string if a close match is found, or "Unknown" if not found.
-         */
-        std::string reason_fuzzy(const std::string &input) {
-            const char *result = fossil_jellyfish_reason_fuzzy(&chain, input.c_str());
-            return std::string(result);
-        }
-
-        /**
-         * Save the jellyfish chain to a file.
-         * This serializes the chain to a file for persistence.
-         *
-         * @param filepath The path to the file where the chain will be saved.
-         * @return 0 on success, non-zero on failure.
-         */
-        int save(const std::string &filepath) const {
-            return fossil_jellyfish_save(&chain, filepath.c_str());
-        }
-
-        /**
-         * Load a jellyfish chain from a file.
-         * This deserializes the chain from a file.
-         *
-         * @param filepath The path to the file from which the chain will be loaded.
-         * @return 0 on success, non-zero on failure.
-         */
-        int load(const std::string &filepath) {
-            return fossil_jellyfish_load(&chain, filepath.c_str());
-        }
-
-        /**
-         * Get the reason chain for a given input.
-         * This function provides a detailed explanation of how the AI arrived at its reasoning.
-         *
-         * @param input The input string to reason about.
-         * @param depth The depth of reasoning to explore (0 for no depth).
-         * @return A string explaining the reasoning process, or "Unknown" if not found.
-         */
-        std::string reason_chain(const std::string &input, int depth = 0) {
-            const char *result = fossil_jellyfish_reason_chain(&chain, input.c_str(), depth);
-            return std::string(result);
-        }
-
-        /**
-         * Decay the confidence of the jellyfish chain.
-         * This reduces the confidence of all blocks in the chain by a specified decay rate.
-         *
-         * @param decay_rate The rate at which to decay confidence (0.0 - 1.0).
+         * Decay the confidence of the AI's knowledge.
+         * 
+         * @param decay_rate The rate at which to decay confidence.
          */
         void decay_confidence(float decay_rate) {
-            fossil_jellyfish_decay_confidence(&chain, decay_rate);
+            fossil_jellyfish_decay_confidence(&chain_, decay_rate);
         }
-        
+
         /**
-     * @brief Load a named model into the mind from a .fish or binary file.
-     *
-     * @param filepath Path to the model file.
-     * @param name     Logical name for the model within the mind.
-     * @return True if loaded successfully, false on failure.
-     */
-    bool load_model(const std::string &filepath, const std::string &name) {
-        return fossil_jellyfish_mind_load_model(&mind, filepath.c_str(), name.c_str()) != 0;
-    }
-
-    /**
-     * @brief Perform reasoning across all loaded models.
-     *
-     * @param input Input question or query.
-     * @return The best known answer string, or "Unknown".
-     */
-    std::string mind_reason(const std::string &input) {
-        return std::string(fossil_jellyfish_mind_reason(&mind, input.c_str()));
-    }
-
-    /**
-     * @brief Tokenize the input string into lowercase word tokens.
-     *
-     * @param input The input string to tokenize.
-     * @return A vector of token strings (max size determined by macro).
-     */
-    std::vector<std::string> tokenize(const std::string &input) {
-        char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE] = {};
-        size_t count = fossil_jellyfish_tokenize(input.c_str(), tokens, FOSSIL_JELLYFISH_MAX_TOKENS);
-
-        std::vector<std::string> result;
-        for (size_t i = 0; i < count; ++i) {
-            result.emplace_back(tokens[i]);
+         * Get the knowledge coverage of the AI.
+         * 
+         * @return The knowledge coverage as a float.
+         */
+        float knowledge_coverage() const {
+            return fossil_jellyfish_knowledge_coverage(&chain_);
         }
-        return result;
-    }
 
-    /**
-     * @brief Get the memory block with the highest confidence.
-     *
-     * @param chain Reference to a memory chain.
-     * @return Pointer to the best memory block, or nullptr if none.
-     */
-    const fossil_jellyfish_block* best_memory(const fossil_jellyfish_chain &chain) const {
-        return fossil_jellyfish_best_memory(&chain);
-    }
+        /**
+         * Get the best memory block of the AI.
+         * 
+         * @return A pointer to the best memory block.
+         */
+        const fossil_jellyfish_block* best_memory() const {
+            return fossil_jellyfish_best_memory(&chain_);
+        }
 
-    /**
-     * @brief Get a knowledge coverage score from the given chain.
-     *
-     * @param chain Reference to the chain.
-     * @return A float from 0.0 to 1.0 indicating how full the chain is.
-     */
-    float knowledge_coverage(const fossil_jellyfish_chain &chain) const {
-        return fossil_jellyfish_knowledge_coverage(&chain);
-    }
+        /**
+         * Detect if a given input-output pair would conflict with existing memories.
+         * 
+         * @param input The input string to check.
+         * @param output The output string to check.
+         * @return 1 if a conflict is detected, 0 otherwise.
+         */
+        int detect_conflict(const char* input, const char* output) const {
+            return fossil_jellyfish_detect_conflict(&chain_, input, output);
+        }
 
-    /**
-     * @brief Check if the input-output pair conflicts with existing memory.
-     *
-     * @param chain  The chain to check against.
-     * @param input  Input string.
-     * @param output Output string.
-     * @return True if a contradiction exists, false otherwise.
-     */
-    bool detect_conflict(const fossil_jellyfish_chain &chain, const std::string &input, const std::string &output) const {
-        return fossil_jellyfish_detect_conflict(&chain, input.c_str(), output.c_str()) != 0;
-    }
+        /**
+         * Reflect on the current state of the AI.
+         * This prints a self-reflection report to stdout.
+         */
+        void reflect() const {
+            fossil_jellyfish_reflect(&chain_);
+        }
 
-    /**
-     * @brief Print a self-reflection report about a chain.
-     *
-     * @param chain Reference to the memory chain to reflect on.
-     */
-    void reflect(const fossil_jellyfish_chain &chain) const {
-        fossil_jellyfish_reflect(&chain);
-    }
+        /**
+         * Parse a .jellyfish file and extract mindsets.
+         * 
+         * @param filepath The path to the .jellyfish file.
+         * @param out_mindsets Vector to store parsed mindsets.
+         * @return The number of mindsets parsed, or 0 on failure.
+         */
+        const fossil_jellyfish_chain& get_chain() const { return chain_; }
 
-    /**
-     * @brief Access the underlying C mind object.
-     *
-     * @return Reference to the mind struct.
-     */
-    fossil_jellyfish_mind& raw() { return mind; }
+        /**         * Parse a .jellyfish file and extract mindsets.
+         * 
+         * @param filepath The path to the .jellyfish file.
+         * @param out_mindsets Vector to store parsed mindsets.
+         * @return The number of mindsets parsed, or 0 on failure.
+         */
+        fossil_jellyfish_chain& get_chain() { return chain_; }
 
     private:
-        fossil_jellyfish_mind mind; ///< Internal mind state holding multiple chains/models.
-        fossil_jellyfish_chain chain; // The jellyfish chain instance
+        fossil_jellyfish_chain chain_;
     };
 
 } // namespace ai

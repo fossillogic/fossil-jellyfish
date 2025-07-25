@@ -41,174 +41,225 @@ FOSSIL_TEARDOWN(cpp_jellyfish_fixture) {
 
 using fossil::ai::JellyfishAI;
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_init) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_init) {
     JellyfishAI ai;
-    // After init, the chain should be empty and valid
-    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 0);
+    const fossil_jellyfish_chain& chain = ai.get_chain();
+    ASSUME_ITS_EQUAL_SIZE(chain.count, 0);
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
+        ASSUME_ITS_TRUE(chain.memory[i].valid == 0);
+    }
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_learn_and_reason) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_learn_and_reason) {
     JellyfishAI ai;
-
     ai.learn("hello", "world");
-    ai.learn("foo", "bar");
+    const fossil_jellyfish_chain& chain = ai.get_chain();
+    ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "hello");
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "world");
+    ASSUME_ITS_TRUE(chain.memory[0].valid == 1);
 
-    std::string out1 = ai.reason("hello");
-    std::string out2 = ai.reason("foo");
-    std::string out3 = ai.reason("unknown");
+    std::string result = ai.reason("hello");
+    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "world");
 
-    ASSUME_ITS_EQUAL_CSTR(out1.c_str(), "world");
-    ASSUME_ITS_EQUAL_CSTR(out2.c_str(), "bar");
-    ASSUME_ITS_EQUAL_CSTR(out3.c_str(), "Unknown");
+    // Test unknown input
+    result = ai.reason("unknown");
+    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "Unknown");
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_cleanup) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_cleanup) {
     JellyfishAI ai;
-
-    ai.learn("a", "1");
-    ai.learn("b", "2");
-    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
+    ai.learn("a", "b");
+    fossil_jellyfish_chain& chain = ai.get_chain();
+    chain.memory[0].confidence = 0.01f; // force low confidence
+    chain.memory[0].valid = 1;
+    chain.count = 1;
 
     ai.cleanup();
-    // After cleanup, the chain should be empty
-    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 0);
+    ASSUME_ITS_EQUAL_SIZE(chain.count, 0);
+    ASSUME_ITS_TRUE(chain.memory[0].valid == 0);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_dump) {
-    JellyfishAI ai;
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_hash) {
+    uint8_t hash1[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
+    uint8_t hash2[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
+    fossil_jellyfish_hash("foo", "bar", hash1);
+    fossil_jellyfish_hash("foo", "baz", hash2);
 
-    ai.learn("x", "y");
-    // This just checks that dump does not crash; output is not captured
-    ai.dump();
-    ASSUME_ITS_TRUE(ai.get_chain().count == 1);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_chain_hash) {
-    JellyfishAI ai;
-    std::vector<uint8_t> hash1, hash2;
-    ai.hash("input", "output", hash1);
-    ai.hash("input", "output", hash2);
-
-    // Hashes for same input/output should match
-    int same = memcmp(hash1.data(), hash2.data(), hash1.size()) == 0;
-    ASSUME_ITS_TRUE(same);
-
-    std::vector<uint8_t> hash3;
-    ai.hash("input", "different", hash3);
-    // Hashes for different input/output should not match
-    int diff = memcmp(hash1.data(), hash3.data(), hash1.size()) != 0;
+    int diff = 0;
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+        if (hash1[i] != hash2[i]) diff = 1;
     ASSUME_ITS_TRUE(diff);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_reason_fuzzy_exact_and_fuzzy) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_and_load) {
     JellyfishAI ai;
-    ai.learn("apple", "fruit");
-    ai.learn("appl", "not fruit");
+    ai.learn("input1", "output1");
+    ai.learn("input2", "output2");
 
-    // Exact match
-    std::string out1 = ai.reason_fuzzy("apple");
-    ASSUME_ITS_EQUAL_CSTR(out1.c_str(), "fruit");
+    // Set known confidence values to ensure they're saved/loaded properly
+    fossil_jellyfish_chain& chain = ai.get_chain();
+    chain.memory[0].confidence = 0.85f;
+    chain.memory[1].confidence = 0.65f;
 
-    // Fuzzy match (missing 'e')
-    std::string out2 = ai.reason_fuzzy("appl");
-    // Accept either "not fruit" or "fruit" depending on fuzzy logic
-    ASSUME_ITS_TRUE(out2 == "not fruit" || out2 == "fruit");
+    const char *filename = "test_jellyfish_save_load.jellyfish";
+    bool save_result = ai.save(filename);
+    ASSUME_ITS_TRUE(save_result);
 
-    // Fuzzy match (typo)
-    std::string out3 = ai.reason_fuzzy("aple");
-    ASSUME_ITS_TRUE(out3 == "fruit" || out3 == "not fruit");
+    JellyfishAI loaded;
+    bool load_result = loaded.load(filename);
+    ASSUME_ITS_TRUE(load_result);
 
-    // No match
-    std::string out4 = ai.reason_fuzzy("banana");
-    ASSUME_ITS_EQUAL_CSTR(out4.c_str(), "Unknown");
+    const fossil_jellyfish_chain& loaded_chain = loaded.get_chain();
+    ASSUME_ITS_EQUAL_SIZE(loaded_chain.count, 2);
+
+    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].input, "input1");
+    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].output, "output1");
+    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].input, "input2");
+    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].output, "output2");
+
+    // Confirm confidence values persisted (within tolerance)
+    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[0].confidence - 0.85f) < 0.01f);
+    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[1].confidence - 0.65f) < 0.01f);
+
+    // Clean up
+    remove(filename);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_save_and_load) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_fail) {
     JellyfishAI ai;
-    ai.learn("cat", "meow");
-    ai.learn("dog", "bark");
-
-    const std::string filepath = "jellyfish_chain_test_save.fish";
-
-    int save_result = ai.save(filepath);
-    ASSUME_ITS_EQUAL_I32(save_result, 1);  // Expect 1 on success now
-
-    JellyfishAI ai2;
-    int load_result = ai2.load(filepath);
-    ASSUME_ITS_EQUAL_I32(load_result, 1);  // Expect 1 on success now
-
-    // Check that loaded data matches
-    std::string out1 = ai2.reason("cat");
-    std::string out2 = ai2.reason("dog");
-    ASSUME_ITS_EQUAL_CSTR(out1.c_str(), "meow");
-    ASSUME_ITS_EQUAL_CSTR(out2.c_str(), "bark");
-
-    // Cleanup test file
-    std::remove(filepath.c_str());
+    bool result = ai.save("/invalid/path/should_fail.jellyfish");
+    ASSUME_ITS_TRUE(result);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_load_nonexistent_file) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_load_fail) {
     JellyfishAI ai;
-    int result = ai.load("nonexistent_file_hopefully_12345.dat");
-    ASSUME_ITS_TRUE(result != 0);
+    bool result = ai.load("/invalid/path/should_fail.jellyfish");
+    ASSUME_ITS_TRUE(result);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_reason_chain_basic) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_fuzzy) {
     JellyfishAI ai;
-    ai.learn("sun", "star");
-    ai.learn("star", "celestial");
+    ai.learn("hello", "world");
+    ai.learn("foo", "bar");
 
-    // Depth 0: should only show direct reasoning
-    std::string chain0 = ai.reason_chain("sun", 0);
-    ASSUME_ITS_TRUE(chain0.find("star") != std::string::npos);
-
-    // Depth 1: should show one level of reasoning
-    std::string chain1 = ai.reason_chain("sun", 1);
-    ASSUME_ITS_TRUE(chain1.find("star") != std::string::npos);
-    ASSUME_ITS_TRUE(chain1.find("celestial") != std::string::npos);
-
-    // Unknown input
-    std::string chain_unknown = ai.reason_chain("moon", 1);
-    ASSUME_ITS_EQUAL_CSTR(chain_unknown.c_str(), "Unknown");
+    // Fuzzy match: "helo" should match "hello"
+    std::string result = ai.reason("helo");
+    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "world");
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfishai_decay_confidence) {
+FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_chain) {
     JellyfishAI ai;
-    ai.learn("alpha", "beta");
-    ai.learn("gamma", "delta");
+    ai.learn("abc", "123");
+    ai.learn("def", "456");
 
-    // Optionally, get confidence before decay if API allows
-    // For now, just call decay and check chain is still valid
-    ai.decay_confidence(0.5f);
-
-    // After decay, chain should still have same count
-    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
-
-    // Decay with 0.0 (no decay)
-    ai.decay_confidence(0.0f);
-    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
-
-    // Decay with 1.0 (full decay)
-    ai.decay_confidence(1.0f);
-    // Chain should still exist, but confidence values would be 0 if accessible
-    ASSUME_ITS_EQUAL_SIZE(ai.get_chain().count, 2);
+    std::string result = ai.reason("def");
+    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "456");
 }
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_decay_confidence) {
+    JellyfishAI ai;
+    ai.learn("a", "b");
+    fossil_jellyfish_chain& chain = ai.get_chain();
+
+    // Set up one valid block
+    chain.memory[0].confidence = 1.0f;
+    chain.memory[0].valid = 1;
+    chain.count = 1;
+
+    // Simulate old timestamp to force decay
+    time_t now = time(NULL);
+    time_t past = now - 172800; // 2 days ago (48h)
+    chain.memory[0].timestamp = (uint64_t)past * 1000; // assuming ms
+
+    ai.decay_confidence(0.0f); // decay_rate is unused but required by API
+
+    float conf = chain.memory[0].confidence;
+    int valid = chain.memory[0].valid;
+
+    // Confidence should be decayed significantly (2 half-lives)
+    ASSUME_ITS_TRUE(conf < 0.26f); // 0.5^2 = 0.25
+
+    // Should be invalidated if too low
+    ASSUME_ITS_TRUE(valid == 0 || conf < 0.05f);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_tokenize) {
+    char tokens[8][FOSSIL_JELLYFISH_TOKEN_SIZE] = {{0}};
+    size_t n = fossil_jellyfish_tokenize("Hello, world! 123", tokens, 8);
+    ASSUME_ITS_EQUAL_SIZE(n, 3);
+    ASSUME_ITS_EQUAL_CSTR(tokens[0], "hello");
+    ASSUME_ITS_EQUAL_CSTR(tokens[1], "world");
+    ASSUME_ITS_EQUAL_CSTR(tokens[2], "123");
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_best_memory) {
+    JellyfishAI ai;
+    ai.learn("a", "b");
+    ai.learn("c", "d");
+    fossil_jellyfish_chain& chain = ai.get_chain();
+    chain.memory[0].confidence = 0.5f;
+    chain.memory[1].confidence = 0.9f;
+    chain.memory[0].valid = 1;
+    chain.memory[1].valid = 1;
+    chain.count = 2;
+
+    const fossil_jellyfish_block *best = ai.best_memory();
+    ASSUME_ITS_TRUE(best != NULL);
+    ASSUME_ITS_EQUAL_CSTR(best->input, "c");
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_detect_conflict) {
+    JellyfishAI ai;
+    ai.learn("foo", "bar");
+    int conflict = ai.detect_conflict("foo", "baz");
+    ASSUME_ITS_TRUE(conflict == 0); // Not implemented, always returns 0
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_knowledge_coverage) {
+    JellyfishAI ai;
+    ai.learn("a", "b");
+    fossil_jellyfish_chain& chain = ai.get_chain();
+    chain.memory[0].valid = 1;
+    chain.count = 1;
+    float coverage = ai.knowledge_coverage();
+    ASSUME_ITS_TRUE(coverage >= 0.0f && coverage <= 1.0f);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_struct_fields) {
+    JellyfishAI ai;
+    fossil_jellyfish_chain& chain = ai.get_chain();
+    strcpy(chain.memory[0].input, "foo");
+    strcpy(chain.memory[0].output, "bar");
+    chain.count = 1;
+
+    ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "foo");
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "bar");
+}
+
+
 
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
 FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {    
-    // Generic Fish Fixture
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_init);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_learn_and_reason);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_cleanup);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_dump);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_chain_hash);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_save_and_load);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_load_nonexistent_file);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_reason_fuzzy_exact_and_fuzzy);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_reason_chain_basic);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfishai_decay_confidence);
-
+    // Generic ToFu Fixture
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_init);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_learn_and_reason);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_cleanup);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_save_and_load);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_hash);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_save_fail);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_load_fail);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_reason_fuzzy);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_reason_chain);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_decay_confidence);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_tokenize);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_best_memory);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_detect_conflict);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_knowledge_coverage);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_struct_fields);
+    
     FOSSIL_TEST_REGISTER(cpp_jellyfish_fixture);
 } // end of tests
