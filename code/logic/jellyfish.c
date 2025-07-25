@@ -446,7 +446,7 @@ int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath) {
     int ok = 1; // unified success flag
 
     if (!match_key_value(&ptr, "signature", "JFS1")) ok = 0;
-    if (ok) skip_key_value(&ptr, "version");
+    if (ok) skip_key_value(&ptr, "version", "0.1");
 
     if (ok && (!skip_key(&ptr, "origin_device_id") || !skip_symbol(&ptr, '"'))) ok = 0;
     if (ok) {
