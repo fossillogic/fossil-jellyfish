@@ -874,7 +874,7 @@ void fossil_jellyfish_validation_report(const fossil_jellyfish_chain *chain) {
     printf("== Jellyfish Chain Validation Report ==\n");
     for (size_t i = 0; i < chain->count; ++i) {
         const fossil_jellyfish_block *block = &chain->memory[i];
-        printf("Block %zu: ", i);
+        printf("Block %lu: ", (unsigned long)i);
 
         if (!block->valid) {
             printf("Invalid\n");
