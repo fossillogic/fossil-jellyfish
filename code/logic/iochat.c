@@ -69,9 +69,16 @@ bool fossil_iochat_respond(fossil_iochat_session *session, const char *input, ch
     return true;
 }
 
-bool fossil_iochat_learn(fossil_iochat_session *session, const char *input, const char *output) {
-    if (!session || !input || !output || !session->chain) return false;
-    return fossil_jellyfish_learn(session->chain, input, output);
+int fossil_iochat_learn(fossil_iochat_session *session, const char *input, const char *output) {
+    if (!session || !session->chain || !input || !output) {
+        return false; // Invalid parameters
+    }
+
+    // Perform the learning action
+    fossil_jellyfish_learn(session->chain, input, output);
+
+    // Assume success since jellyfish_learn is void and doesn't report errors
+    return true;
 }
 
 // =========================================
