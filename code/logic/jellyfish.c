@@ -853,7 +853,7 @@ bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block) {
 }
 
 bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain) {
-    if (!chain || chain->count == 0 || !chain->memory) return false;
+    if (!chain || chain->count == 0) return false;
 
     for (size_t i = 0; i < chain->count; i++) {
         const fossil_jellyfish_block *block = &chain->memory[i];
