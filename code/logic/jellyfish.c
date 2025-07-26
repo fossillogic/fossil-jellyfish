@@ -768,16 +768,46 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
 }
 
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
+    if (!chain || chain->count == 0) {
+        printf("== Jellyfish Self-Reflection ==\n");
+        printf("No memories available.\n");
+        printf("================================\n");
+        return;
+    }
+
+    size_t valid = 0;
+    float confidence_sum = 0.0f;
+    float confidence_min = 1.0f, confidence_max = 0.0f;
+    uint64_t usage_sum = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) continue;
+        valid++;
+        confidence_sum += block->confidence;
+        usage_sum += block->usage_count;
+
+        if (block->confidence < confidence_min) confidence_min = block->confidence;
+        if (block->confidence > confidence_max) confidence_max = block->confidence;
+    }
+
+    float coverage = (chain->count > 0) ? (float)valid / (float)chain->count : 0.0f;
+    float confidence_avg = (valid > 0) ? confidence_sum / valid : 0.0f;
+
     printf("== Jellyfish Self-Reflection ==\n");
-    printf("Total Memories: %llu\n", (unsigned long long)chain->count);
-    printf("Valid Memories: %llu\n", (unsigned long long)(fossil_jellyfish_knowledge_coverage(chain) * chain->count));
+    printf("Total Memories  : %llu\n", (unsigned long long)chain->count);
+    printf("Valid Memories  : %llu (%.1f%%)\n", (unsigned long long)valid, coverage * 100.0f);
+    printf("Avg Confidence  : %.3f\n", confidence_avg);
+    printf("Min Confidence  : %.3f\n", confidence_min);
+    printf("Max Confidence  : %.3f\n", confidence_max);
+    printf("Total Usage     : %llu\n", (unsigned long long)usage_sum);
 
     const fossil_jellyfish_block *best = fossil_jellyfish_best_memory(chain);
     if (best) {
-        printf("Strongest Memory:\n");
+        printf("\nStrongest Memory:\n");
         printf("  Input      : %s\n", best->input);
         printf("  Output     : %s\n", best->output);
-        printf("  Confidence : %.2f\n", best->confidence);
+        printf("  Confidence : %.3f\n", best->confidence);
         printf("  Usage Count: %u\n", best->usage_count);
         printf("  Timestamp  : %" PRIu64 "\n", best->timestamp);
         printf("  Delta ms   : %u\n", best->delta_ms);
@@ -801,8 +831,9 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
         }
         printf("\n");
     } else {
-        printf("No confident memories yet.\n");
+        printf("No confident memories found.\n");
     }
+
     printf("================================\n");
 }
 
@@ -822,14 +853,62 @@ bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block) {
 }
 
 bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain) {
-    if (!chain) return false;
+    if (!chain || chain->count == 0 || !chain->memory) return false;
 
-    // Check each block in the chain
     for (size_t i = 0; i < chain->count; i++) {
-        if (!fossil_jellyfish_verify_block(&chain->memory[i])) return false;
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        if (!fossil_jellyfish_verify_block(block)) {
+            return false;
+        }
     }
 
     return true;
+}
+
+void fossil_jellyfish_validation_report(const fossil_jellyfish_chain *chain) {
+    if (!chain) {
+        printf("[Validation] Chain is NULL\n");
+        return;
+    }
+
+    printf("== Jellyfish Chain Validation Report ==\n");
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        printf("Block %zu: ", i);
+
+        if (!block->valid) {
+            printf("Invalid\n");
+            continue;
+        }
+
+        bool ok = fossil_jellyfish_verify_block(block);
+        printf("%s\n", ok ? "OK" : "Failed");
+    }
+    printf("=======================================\n");
+}
+
+float fossil_jellyfish_chain_trust_score(const fossil_jellyfish_chain *chain) {
+    if (!chain || chain->count == 0) return 0.0f;
+
+    float total_conf = 0.0f;
+    size_t valid_count = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) continue;
+        if (block->immutable && block->confidence >= 0.9f) {
+            total_conf += block->confidence;
+            ++valid_count;
+        }
+    }
+
+    return valid_count ? total_conf / valid_count : 0.0f;
+}
+
+void fossil_jellyfish_mark_immutable(fossil_jellyfish_block *block) {
+    if (block) {
+        block->immutable = 1;
+    }
 }
 
 /**
