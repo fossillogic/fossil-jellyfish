@@ -18,6 +18,14 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <float.h>
+#include <time.h>
+#include <math.h>
 
 enum {
     FOSSIL_JELLYFISH_MAX_MEM          = 128,
