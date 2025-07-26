@@ -12,6 +12,8 @@
  * -----------------------------------------------------------------------------
  */
 #include "fossil/ai/iochat.h"
+#include <string.h>
+#include <stdio.h>
 
 // =========================================
 // Session Initialization and Management
@@ -21,7 +23,7 @@ void fossil_iochat_init(fossil_iochat_session *session, fossil_jellyfish_chain *
     if (!session || !chain) return;
     memset(session, 0, sizeof(fossil_iochat_session));
     session->chain = chain;
-    session->session_id = (uint32_t)(uintptr_t)session; // weak uniqueness
+    session->session_id = (uint32_t)(uintptr_t)session;
     session->response_threshold = 0.5f;
     session->enable_learning = true;
 }
@@ -33,7 +35,7 @@ void fossil_iochat_reset(fossil_iochat_session *session) {
 }
 
 void fossil_iochat_shutdown(fossil_iochat_session *session) {
-    // No dynamic allocation yet
+    // Nothing dynamic yet
     (void)session;
 }
 
@@ -47,20 +49,19 @@ bool fossil_iochat_respond(fossil_iochat_session *session, const char *input, ch
     // Store input
     strncpy(session->last_input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
 
-    // Attempt to find a matching block
     const fossil_jellyfish_block *block = fossil_jellyfish_best_match(session->chain, input);
-    if (block && block->confidence >= session->response_threshold) {
+    if (block && block->valid && block->confidence >= session->response_threshold) {
         strncpy(session->last_output, block->output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
         strncpy(output, block->output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
         return true;
     }
 
-    // Fallback: echo or fixed default response
+    // Fallback response
     const char *fallback = "I'm still learning. Could you rephrase?";
     strncpy(session->last_output, fallback, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
     strncpy(output, fallback, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
 
-    // Optionally learn new pair
+    // Learn only if permitted
     if (session->enable_learning) {
         fossil_jellyfish_learn(session->chain, input, fallback);
     }
@@ -80,7 +81,7 @@ bool fossil_iochat_learn(fossil_iochat_session *session, const char *input, cons
 bool fossil_iochat_knows(const fossil_iochat_session *session, const char *input) {
     if (!session || !input || !session->chain) return false;
     const fossil_jellyfish_block *block = fossil_jellyfish_best_match(session->chain, input);
-    return (block && block->confidence >= session->response_threshold);
+    return (block && block->valid && block->confidence >= session->response_threshold);
 }
 
 const char* fossil_iochat_last_output(const fossil_iochat_session *session) {
