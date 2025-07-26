@@ -9,7 +9,7 @@ else
 endif
 
 fossil_fish_lib = static_library('fossil-jellyfish',
-    files('jellyfish.c'),
+    files('jellyfish.c', 'iochat.c'),
     install: true,
     dependencies: [cc.find_library('m', required: false), winsock_dep],
     include_directories: dir)
