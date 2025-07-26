@@ -44,22 +44,27 @@ extern "C"
 // *****************************************************************************
 
 /**
- * Represents a single jellyfish block in the AI memory.
- * Each block contains an input, output, hash, timestamp, and validity flag.
+ * @brief Represents a single memory block in the Jellyfish AI chain.
+ *
+ * Each block stores a learned input-output pair, metadata about usage,
+ * cryptographic fingerprinting, and timing. The `immutable` flag ensures
+ * the block is protected from decay, pruning, or accidental overwrites.
  */
 typedef struct {
     char input[FOSSIL_JELLYFISH_INPUT_SIZE];
     char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];
     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];
-    uint64_t timestamp;               // Absolute UNIX timestamp
-    uint32_t delta_ms;                // New: time since last block in ms
-    uint32_t duration_ms;             // New: time taken to process this block
-    int valid;
-    float confidence;
-    uint32_t usage_count;
+    uint64_t timestamp;               // Absolute UNIX timestamp (ms granularity if needed)
+    uint32_t delta_ms;                // Time since last block in ms
+    uint32_t duration_ms;             // Time taken to process this block
+    int valid;                        // Whether the block is currently considered valid
+    float confidence;                 // Confidence score (0.0 to 1.0)
+    uint32_t usage_count;             // Times this block was retrieved or matched
 
-    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];
-    uint8_t signature[FOSSIL_SIGNATURE_SIZE];
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];     // Source device fingerprint
+    uint8_t signature[FOSSIL_SIGNATURE_SIZE];     // Cryptographic signature for authenticity
+
+    int immutable;                    // New: If non-zero, block is protected from decay and removal
 } fossil_jellyfish_block;
 
 /**
