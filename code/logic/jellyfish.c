@@ -911,6 +911,85 @@ void fossil_jellyfish_mark_immutable(fossil_jellyfish_block *block) {
     }
 }
 
+int fossil_jellyfish_prune_chain(fossil_jellyfish_chain *chain, float min_confidence) {
+    if (!chain || chain->count == 0) return 0;
+    int pruned = 0;
+
+    for (size_t i = 0; i < chain->count; ) {
+        fossil_jellyfish_block *block = &chain->memory[i];
+
+        if (!block->valid || block->confidence < min_confidence) {
+            // Shift the rest down
+            memmove(&chain->memory[i], &chain->memory[i + 1], sizeof(fossil_jellyfish_block) * (chain->count - i - 1));
+            chain->count--;
+            pruned++;
+            // Do not increment i, as we now have a new block at this index
+        } else {
+            i++;
+        }
+    }
+
+    return pruned;
+}
+
+int fossil_jellyfish_deduplicate_chain(fossil_jellyfish_chain *chain) {
+    if (!chain || chain->count < 2) return 0;
+    int removed = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        fossil_jellyfish_block *a = &chain->memory[i];
+
+        for (size_t j = i + 1; j < chain->count; ) {
+            fossil_jellyfish_block *b = &chain->memory[j];
+            if (strcmp(a->input, b->input) == 0 && strcmp(a->output, b->output) == 0) {
+                // Remove duplicate b
+                memmove(&chain->memory[j], &chain->memory[j + 1], sizeof(fossil_jellyfish_block) * (chain->count - j - 1));
+                chain->count--;
+                removed++;
+            } else {
+                j++;
+            }
+        }
+    }
+
+    return removed;
+}
+
+static void trim_whitespace(char *str) {
+    if (!str) return;
+    
+    // Trim leading
+    char *start = str;
+    while (isspace((unsigned char)*start)) start++;
+
+    // Move trimmed start to front
+    if (start != str) memmove(str, start, strlen(start) + 1);
+
+    // Trim trailing
+    size_t len = strlen(str);
+    while (len > 0 && isspace((unsigned char)str[len - 1])) str[--len] = '\0';
+}
+
+int fossil_jellyfish_compress_chain(fossil_jellyfish_chain *chain) {
+    if (!chain) return 0;
+    int modified = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        fossil_jellyfish_block *block = &chain->memory[i];
+        size_t orig_input_len = strlen(block->input);
+        size_t orig_output_len = strlen(block->output);
+
+        trim_whitespace(block->input);
+        trim_whitespace(block->output);
+
+        if (strlen(block->input) != orig_input_len || strlen(block->output) != orig_output_len) {
+            modified++;
+        }
+    }
+
+    return modified;
+}
+
 /**
  * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts models.
  *
