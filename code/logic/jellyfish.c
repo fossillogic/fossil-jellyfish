@@ -767,6 +767,30 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
     return 0;
 }
 
+const fossil_jellyfish_block* fossil_jellyfish_best_match(const fossil_jellyfish_chain *chain, const char *input) {
+    if (!chain || !input || chain->count == 0) return NULL;
+
+    const fossil_jellyfish_block *best = NULL;
+    float best_confidence = -FLT_MAX;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+
+        if (!block->valid) continue;
+        if (strncmp(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) != 0) continue;
+
+        if (block->confidence > best_confidence) {
+            best = block;
+            best_confidence = block->confidence;
+        } else if (block->confidence == best_confidence && block->immutable && (!best || !best->immutable)) {
+            // Prefer immutable blocks in case of tie
+            best = block;
+        }
+    }
+
+    return best;
+}
+
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
     if (!chain || chain->count == 0) {
         printf("== Jellyfish Self-Reflection ==\n");
