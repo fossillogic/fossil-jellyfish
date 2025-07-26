@@ -245,13 +245,56 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
 bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block);
 
 /**
- * Verifies the integrity of a jellyfish chain.
- * This checks if all blocks are valid and properly linked.
- * 
- * @param chain Pointer to the jellyfish chain to verify.
- * @return True if the chain is valid, false otherwise.
+ * @brief Prints a validation report for each memory block in the Jellyfish chain.
+ *
+ * Iterates through the chain and invokes `fossil_jellyfish_verify_block` on each valid block,
+ * outputting a status line for each entry to standard output.
+ *
+ * This helps in debugging chain integrity, visualizing where corruption or verification
+ * failures occur, and understanding the structure of the chain.
+ *
+ * @param chain Pointer to the Jellyfish chain to validate.
  */
-bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain);
+void fossil_jellyfish_validation_report(const fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Performs full-chain validation by verifying each block.
+ *
+ * Calls `fossil_jellyfish_verify_block` for every block in the chain and returns
+ * false if any verification fails.
+ *
+ * This function is useful for asserting the integrity of a deserialized chain,
+ * checking for tampering, or before accepting input from external sources.
+ *
+ * @param chain Pointer to the Jellyfish chain to verify.
+ * @return true if all blocks pass verification, false otherwise.
+ */
+bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Computes a normalized trust score for the Jellyfish chain.
+ *
+ * Only includes valid and immutable blocks in the scoring. Confidence values from
+ * eligible blocks are averaged to produce a floating-point trust score from 0.0 to 1.0.
+ *
+ * This metric can help determine the chain’s overall credibility, for instance before
+ * deploying, merging, or persisting long-term knowledge.
+ *
+ * @param chain Pointer to the Jellyfish chain to analyze.
+ * @return Trust score (0.0f to 1.0f), or 0.0f if the chain is null or has no valid entries.
+ */
+float fossil_jellyfish_chain_trust_score(const fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Marks a Jellyfish memory block as immutable.
+ *
+ * This flag indicates that the block should not be altered or pruned, and will be
+ * included in trust score calculations. Immutable blocks are useful for storing core
+ * logic, critical responses, or verified inputs that must persist through decay or pruning.
+ *
+ * @param block Pointer to the memory block to mark as immutable.
+ */
+void fossil_jellyfish_mark_immutable(fossil_jellyfish_block *block);
 
 /**
  * Parses a .jellyfish file and extracts mindsets.
