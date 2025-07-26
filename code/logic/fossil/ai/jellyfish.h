@@ -333,6 +333,18 @@ int fossil_jellyfish_deduplicate_chain(fossil_jellyfish_chain *chain);
  */
 int fossil_jellyfish_compress_chain(fossil_jellyfish_chain *chain);
 
+/**
+ * @brief Finds the best matching memory block in the chain for a given input string.
+ * 
+ * It selects the most confident valid response, favoring immutable blocks if tied,
+ * and optionally factoring in future enhancements like string similarity or recency.
+ * 
+ * @param chain The Jellyfish chain to search.
+ * @param input The input string to match.
+ * @return Pointer to the best matching block, or NULL if none found.
+ */
+const fossil_jellyfish_block* fossil_jellyfish_best_match(const fossil_jellyfish_chain *chain, const char *input);
+
 #ifdef __cplusplus
 }
 #include <stdexcept>
