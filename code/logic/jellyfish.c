@@ -12,15 +12,6 @@
  * -----------------------------------------------------------------------------
  */
 #include "fossil/ai/jellyfish.h"
-#include <inttypes.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <float.h>
-#include <time.h>
-#include <math.h>
-
 
 // HASH Algorithm magic
 
