@@ -311,6 +311,28 @@ void fossil_jellyfish_mark_immutable(fossil_jellyfish_block *block);
  */
 int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_chains);
 
+/**
+ * @brief Prunes invalid or low-confidence blocks from the chain.
+ * @param chain The jellyfish memory chain.
+ * @param min_confidence Threshold below which memories are removed.
+ * @return Number of blocks pruned.
+ */
+int fossil_jellyfish_prune_chain(fossil_jellyfish_chain *chain, float min_confidence);
+
+/**
+ * @brief Deduplicates blocks with identical input/output pairs.
+ * @param chain The jellyfish memory chain.
+ * @return Number of duplicates removed.
+ */
+int fossil_jellyfish_deduplicate_chain(fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Compresses the memory chain by trimming whitespace and optionally shrinking fields.
+ * @param chain The jellyfish memory chain.
+ * @return Number of blocks modified.
+ */
+int fossil_jellyfish_compress_chain(fossil_jellyfish_chain *chain);
+
 #ifdef __cplusplus
 }
 #include <stdexcept>
