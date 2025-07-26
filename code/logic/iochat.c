@@ -69,7 +69,7 @@ bool fossil_iochat_respond(fossil_iochat_session *session, const char *input, ch
     return true;
 }
 
-int fossil_iochat_learn(fossil_iochat_session *session, const char *input, const char *output) {
+bool fossil_iochat_learn(fossil_iochat_session *session, const char *input, const char *output) {
     if (!session || !session->chain || !input || !output) {
         return false; // Invalid parameters
     }
