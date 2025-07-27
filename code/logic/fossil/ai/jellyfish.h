@@ -41,7 +41,6 @@ enum {
 
 #define FOSSIL_DEVICE_ID_SIZE      16   // E.g., 128-bit hardware ID
 #define FOSSIL_SIGNATURE_SIZE      64   // ECDSA, ED25519, etc.
-#define FOSSIL_JELLYFISH_MAX_MODULES 16
 
 #ifdef __cplusplus
 extern "C"
@@ -117,12 +116,6 @@ typedef struct {
     int immutable;                                      // Nonzero = model cannot change
     char state_machine[128];                            // Optional state machine ref
 } fossil_jellyfish_jellydsl;
-
-typedef struct {
-    fossil_jellyfish_jellydsl modules[FOSSIL_JELLYFISH_MAX_MODULES];  // Each is a module
-    size_t module_count;
-    int active_module_index;
-} fossil_jellyfish_runtime;
 
 // *****************************************************************************
 // Function prototypes
@@ -418,50 +411,106 @@ void fossil_jellyfish_chain_fingerprint(const fossil_jellyfish_chain *chain, uin
  */
 int fossil_jellyfish_trim(fossil_jellyfish_chain *chain, size_t max_blocks);
 
-// Jellyfish AI runtime
-
 /**
- * Initializes the runtime environment for multiple Jellyfish modules.
- */
-void fossil_jellyfish_runtime_init(fossil_jellyfish_runtime *rt);
-
-/**
- * Loads a Jellyfish module from file and adds it to the runtime.
+ * @brief Reorders valid blocks to the front of the chain and removes gaps.
  *
- * @param rt         The Jellyfish runtime context.
- * @param filepath   Path to the .jellyfish file.
- * @return Index of the module in the runtime, or -1 on failure.
+ * Maintains block order by timestamp and shrinks memory footprint after pruning or trimming.
+ *
+ * @param chain The Jellyfish chain.
+ * @return Number of blocks moved.
  */
-int fossil_jellyfish_runtime_load_module(fossil_jellyfish_runtime *rt, const char *filepath);
+int fossil_jellyfish_chain_compact(fossil_jellyfish_chain *chain);
 
 /**
- * Sets the active module by index.
+ * @brief Computes the age of a block relative to current time.
  *
- * @param rt      The Jellyfish runtime.
- * @param index   Index of the module to activate.
- * @return 0 on success, -1 if invalid index.
+ * @param block The memory block.
+ * @param now   Current UNIX timestamp.
+ * @return      Age in milliseconds.
  */
-int fossil_jellyfish_runtime_set_active(fossil_jellyfish_runtime *rt, int index);
+uint64_t fossil_jellyfish_block_age(const fossil_jellyfish_block *block, uint64_t now);
 
 /**
- * Routes reasoning to the currently active module.
+ * @brief Computes the age of a block relative to current time.
  *
- * @param rt     The runtime context.
- * @param input  Input string to reason on.
- * @return Output string or "Unknown".
+ * @param block The memory block.
+ * @param now   Current UNIX timestamp.
+ * @return      Age in milliseconds.
  */
-const char* fossil_jellyfish_runtime_reason(fossil_jellyfish_runtime *rt, const char *input);
+uint64_t fossil_jellyfish_block_age(const fossil_jellyfish_block *block, uint64_t now);
 
 /**
- * Learn a new input-output pair in all active or matching modules.
+ * @brief Returns a short diagnostic string for a block.
  *
- * @param rt      Runtime context.
- * @param input   Input string.
- * @param output  Output string.
- * @param tag     Optional tag filter (NULL for all).
- * @return Number of modules updated.
+ * Outputs a line including input, output, confidence, usage, and trust status.
+ * Useful for human-readable debug tools or logging systems.
+ *
+ * @param block The block to describe.
+ * @param out   Output buffer.
+ * @param size  Size of the buffer.
  */
-int fossil_jellyfish_runtime_learn_global(fossil_jellyfish_runtime *rt, const char *input, const char *output, const char *tag);
+void fossil_jellyfish_block_explain(const fossil_jellyfish_block *block, char *out, size_t size);
+
+/**
+ * @brief Finds a memory block by its hash.
+ *
+ * @param chain The Jellyfish chain.
+ * @param hash  The 32-byte hash to search for.
+ * @return Pointer to the matching block, or NULL.
+ */
+const fossil_jellyfish_block *fossil_jellyfish_find_by_hash(const fossil_jellyfish_chain *chain, const uint8_t *hash);
+
+/**
+ * @brief Creates a deep copy of a Jellyfish chain.
+ *
+ * @param src Source chain.
+ * @param dst Destination chain.
+ * @return 0 on success, non-zero on error.
+ */
+int fossil_jellyfish_clone_chain(const fossil_jellyfish_chain *src, fossil_jellyfish_chain *dst);
+
+/**
+ * @brief Filters a chain to contain only blocks associated with a specific tag.
+ *
+ * This would only apply if you associate tags at the block level in the future,
+ * or for partial view of chains within a mindset model.
+ *
+ * @param model The JellyDSL model to filter from.
+ * @param tag   The tag to match.
+ * @param out   Output chain to write to.
+ * @return Number of blocks copied.
+ */
+int fossil_jellyfish_filter_by_tag(const fossil_jellyfish_jellydsl *model, const char *tag, fossil_jellyfish_chain *out);
+
+/**
+ * @brief Like `reason`, but includes match confidence, source block, and hash.
+ *
+ * Useful for debug, inspection, or high-trust outputs.
+ *
+ * @param chain  Pointer to the memory chain.
+ * @param input  Input string to reason with.
+ * @param out_output  Output string buffer.
+ * @param out_confidence Optional confidence return pointer.
+ * @param out_block Optional pointer to store matching block.
+ * @return True if a match was found, false otherwise.
+ */
+bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const char *input, char *out_output, float *out_confidence, const fossil_jellyfish_block **out_block);
+
+/**
+ * @brief Signs a Jellyfish block using a private key.
+ * @param block The block to sign.
+ * @param priv_key The private key (implementation-defined).
+ * @return 0 on success.
+ */
+int fossil_jellyfish_block_sign(fossil_jellyfish_block *block, const uint8_t *priv_key);
+
+/**
+ * @brief Verifies a Jellyfish block's signature.
+ * @param block The block to verify.
+ * @param pub_key The public key.
+ * @return True if signature is valid.
+ */
+bool fossil_jellyfish_block_verify_signature(const fossil_jellyfish_block *block, const uint8_t *pub_key);
 
 #ifdef __cplusplus
 }
