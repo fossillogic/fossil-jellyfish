@@ -18,20 +18,6 @@ static time_t session_start_time = 0;
 static uint64_t session_id = 0;
 static FILE *session_log_file = NULL;
 
-const char *fossil_bytes_to_hex(const uint8_t *data, size_t len) {
-    static char hex[129];
-    for (size_t i = 0; i < len; ++i)
-        sprintf(&hex[i * 2], "%02x", data[i]);
-    hex[len * 2] = '\0';
-    return hex;
-}
-
-void fossil_hex_to_bytes(const char *hex, uint8_t *out, size_t out_len) {
-    for (size_t i = 0; i < out_len && hex[i * 2]; ++i) {
-        sscanf(&hex[i * 2], "%2hhx", &out[i]);
-    }
-}
-
 // Helper: Format timestamp string
 static void format_timestamp(time_t t, char *buf, size_t size) {
     struct tm *tm_info = localtime(&t);
