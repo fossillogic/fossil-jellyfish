@@ -327,7 +327,7 @@ int fossil_io_chat_import_json(fossil_jellyfish_chain *chain, const char *filepa
             sscanf(val, "\"hash\": \"%64[^\"]", hex);
             fossil_hex_to_bytes(hex, block.hash, FOSSIL_JELLYFISH_HASH_SIZE);
         } else if ((val = strstr(line, "\"timestamp\""))) {
-            sscanf(val, "\"timestamp\": %llu", &block.timestamp);
+            sscanf(val, "\"timestamp\": %lu", &block.timestamp);
         } else if ((val = strstr(line, "\"delta_ms\""))) {
             sscanf(val, "\"delta_ms\": %u", &block.delta_ms);
         } else if ((val = strstr(line, "\"duration_ms\""))) {
