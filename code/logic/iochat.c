@@ -89,7 +89,7 @@ int fossil_io_chat_start(const char *context_name, fossil_jellyfish_chain *chain
     log_session_line(log_line);
 
     if (chain) {
-        char system_msg[128];
+        char system_msg[200];
         snprintf(system_msg, sizeof(system_msg), "Session started with context \"%s\" at %s", current_context_name, ts);
         record_system_block(chain, system_msg);
     }
