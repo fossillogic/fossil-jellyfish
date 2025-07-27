@@ -41,6 +41,7 @@ enum {
 
 #define FOSSIL_DEVICE_ID_SIZE      16   // E.g., 128-bit hardware ID
 #define FOSSIL_SIGNATURE_SIZE      64   // ECDSA, ED25519, etc.
+#define FOSSIL_JELLYFISH_MAX_MODULES 16
 
 #ifdef __cplusplus
 extern "C"
@@ -116,6 +117,12 @@ typedef struct {
     int immutable;                                      // Nonzero = model cannot change
     char state_machine[128];                            // Optional state machine ref
 } fossil_jellyfish_jellydsl;
+
+typedef struct {
+    fossil_jellyfish_jellydsl modules[FOSSIL_JELLYFISH_MAX_MODULES];  // Each is a module
+    size_t module_count;
+    int active_module_index;
+} fossil_jellyfish_runtime;
 
 // *****************************************************************************
 // Function prototypes
@@ -352,6 +359,109 @@ int fossil_jellyfish_compress_chain(fossil_jellyfish_chain *chain);
  * @return Pointer to the best matching block, or NULL if none found.
  */
 const fossil_jellyfish_block* fossil_jellyfish_best_match(const fossil_jellyfish_chain *chain, const char *input);
+
+/**
+ * @brief Redacts sensitive data in a memory block while retaining structural integrity.
+ *
+ * Overwrites the input and/or output fields with fixed tokens (e.g. "***REDACTED***").
+ * May be used before public export or sharing across systems.
+ *
+ * @param block Pointer to the block to redact.
+ * @return 0 on success, non-zero on error.
+ */
+int fossil_jellyfish_redact_block(fossil_jellyfish_block *block);
+
+/**
+ * @brief Computes statistics over the Jellyfish chain.
+ *
+ * Populates out parameters with stats like count, valid count, confidence mean,
+ * trust score, block age distribution, and immutable ratio.
+ *
+ * @param chain Pointer to the chain to analyze.
+ * @param out_valid_count Pointer to store number of valid blocks.
+ * @param out_avg_confidence Pointer to store average confidence score.
+ * @param out_immutable_ratio Pointer to store immutable block ratio.
+ */
+void fossil_jellyfish_chain_stats(const fossil_jellyfish_chain *chain, size_t *out_valid_count, float *out_avg_confidence, float *out_immutable_ratio);
+
+/**
+ * @brief Compares two Jellyfish chains and identifies block-level differences.
+ *
+ * May be used for verifying synchronization, deduplication between devices,
+ * or forensic audits (e.g., tampering or divergence).
+ *
+ * @param a First chain.
+ * @param b Second chain.
+ * @return Number of differing blocks, or -1 on error.
+ */
+int fossil_jellyfish_compare_chains(const fossil_jellyfish_chain *a, const fossil_jellyfish_chain *b);
+
+/**
+ * @brief Computes a single fingerprint hash for the entire chain.
+ *
+ * Hashes block hashes, timestamps, and content summary to produce a deterministic
+ * digest for the chain’s current state.
+ *
+ * @param chain The Jellyfish chain to hash.
+ * @param out_hash Output buffer of FOSSIL_JELLYFISH_HASH_SIZE bytes.
+ */
+void fossil_jellyfish_chain_fingerprint(const fossil_jellyfish_chain *chain, uint8_t *out_hash);
+
+/**
+ * @brief Trims the chain to retain only the N most recently used or most confident blocks.
+ *
+ * Used for constrained environments or audit-controlled exports.
+ *
+ * @param chain The Jellyfish chain.
+ * @param max_blocks Number of blocks to retain.
+ * @return Number of blocks removed.
+ */
+int fossil_jellyfish_trim(fossil_jellyfish_chain *chain, size_t max_blocks);
+
+// Jellyfish AI runtime
+
+/**
+ * Initializes the runtime environment for multiple Jellyfish modules.
+ */
+void fossil_jellyfish_runtime_init(fossil_jellyfish_runtime *rt);
+
+/**
+ * Loads a Jellyfish module from file and adds it to the runtime.
+ *
+ * @param rt         The Jellyfish runtime context.
+ * @param filepath   Path to the .jellyfish file.
+ * @return Index of the module in the runtime, or -1 on failure.
+ */
+int fossil_jellyfish_runtime_load_module(fossil_jellyfish_runtime *rt, const char *filepath);
+
+/**
+ * Sets the active module by index.
+ *
+ * @param rt      The Jellyfish runtime.
+ * @param index   Index of the module to activate.
+ * @return 0 on success, -1 if invalid index.
+ */
+int fossil_jellyfish_runtime_set_active(fossil_jellyfish_runtime *rt, int index);
+
+/**
+ * Routes reasoning to the currently active module.
+ *
+ * @param rt     The runtime context.
+ * @param input  Input string to reason on.
+ * @return Output string or "Unknown".
+ */
+const char* fossil_jellyfish_runtime_reason(fossil_jellyfish_runtime *rt, const char *input);
+
+/**
+ * Learn a new input-output pair in all active or matching modules.
+ *
+ * @param rt      Runtime context.
+ * @param input   Input string.
+ * @param output  Output string.
+ * @param tag     Optional tag filter (NULL for all).
+ * @return Number of modules updated.
+ */
+int fossil_jellyfish_runtime_learn_global(fossil_jellyfish_runtime *rt, const char *input, const char *output, const char *tag);
 
 #ifdef __cplusplus
 }
