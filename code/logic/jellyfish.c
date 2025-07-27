@@ -1005,6 +1005,98 @@ int fossil_jellyfish_compress_chain(fossil_jellyfish_chain *chain) {
     return modified;
 }
 
+int fossil_jellyfish_redact_block(fossil_jellyfish_block *block) {
+    if (!block) return -1;
+    strncpy(block->input, "***REDACTED***", FOSSIL_JELLYFISH_INPUT_SIZE);
+    strncpy(block->output, "***REDACTED***", FOSSIL_JELLYFISH_OUTPUT_SIZE);
+    memset(block->hash, 0, FOSSIL_JELLYFISH_HASH_SIZE);
+    block->confidence = 0.0f;
+    return 0;
+}
+
+void fossil_jellyfish_chain_stats(const fossil_jellyfish_chain *chain, size_t *out_valid_count, float *out_avg_confidence, float *out_immutable_ratio) {
+    if (!chain) return;
+    size_t valid = 0, immutable = 0;
+    float confidence_sum = 0.0f;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        valid++;
+        confidence_sum += b->confidence;
+        if (b->immutable) immutable++;
+    }
+
+    if (out_valid_count) *out_valid_count = valid;
+    if (out_avg_confidence) *out_avg_confidence = valid ? (confidence_sum / valid) : 0.0f;
+    if (out_immutable_ratio) *out_immutable_ratio = valid ? ((float)immutable / valid) : 0.0f;
+}
+
+int fossil_jellyfish_compare_chains(const fossil_jellyfish_chain *a, const fossil_jellyfish_chain *b) {
+    if (!a || !b) return -1;
+    int diff_count = 0;
+
+    size_t max = (a->count > b->count) ? a->count : b->count;
+    for (size_t i = 0; i < max; ++i) {
+        const fossil_jellyfish_block *ba = (i < a->count) ? &a->memory[i] : NULL;
+        const fossil_jellyfish_block *bb = (i < b->count) ? &b->memory[i] : NULL;
+
+        if (!ba || !bb || memcmp(ba->hash, bb->hash, FOSSIL_JELLYFISH_HASH_SIZE) != 0) {
+            diff_count++;
+        }
+    }
+    return diff_count;
+}
+
+#define ROTL8(x, r) ((uint8_t)(((x) << (r)) | ((x) >> (8 - (r)))))
+
+void fossil_jellyfish_chain_fingerprint(const fossil_jellyfish_chain *chain, uint8_t *out_hash) {
+    if (!chain || !out_hash) return;
+
+    // Initialize hash with a known non-zero pattern (e.g. 0xA5)
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+        out_hash[i] = (uint8_t)(0xA5 ^ i);
+
+    // Mix each block’s hash and timestamp into the output buffer
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j) {
+            uint8_t h = b->hash[j];
+            uint8_t t = ((uint8_t *)&b->timestamp)[j % sizeof(uint64_t)];
+            // Rotate and mix with primes for diffusion
+            uint8_t rotated = ROTL8(h ^ t, (j % 7) + 1);
+            out_hash[j] ^= rotated ^ (j * 31 + i * 17);
+        }
+
+        // Mix in confidence and usage (optional but helpful)
+        uint8_t conf = (uint8_t)(b->confidence * 255.0f);
+        uint8_t usage = (uint8_t)(b->usage_count & 0xFF);
+        out_hash[i % FOSSIL_JELLYFISH_HASH_SIZE] ^= conf ^ usage;
+    }
+}
+
+int fossil_jellyfish_trim(fossil_jellyfish_chain *chain, size_t max_blocks) {
+    if (!chain || chain->count <= max_blocks) return 0;
+
+    // Sort by confidence descending
+    for (size_t i = 0; i < chain->count - 1; ++i) {
+        for (size_t j = i + 1; j < chain->count; ++j) {
+            if (chain->memory[j].confidence > chain->memory[i].confidence) {
+                fossil_jellyfish_block tmp = chain->memory[i];
+                chain->memory[i] = chain->memory[j];
+                chain->memory[j] = tmp;
+            }
+        }
+    }
+
+    size_t removed = chain->count - max_blocks;
+    chain->count = max_blocks;
+    return (int)removed;
+}
+
 /**
  * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts models.
  *
