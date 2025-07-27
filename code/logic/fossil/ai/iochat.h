@@ -33,7 +33,7 @@ extern "C"
  * @param context_name Optional name for the context/session.
  * @return 0 on success, non-zero on failure.
  */
-int fossil_io_chat_start(const char *context_name);
+int fossil_io_chat_start(const char *context_name, fossil_jellyfish_chain *chain);
 
 /**
  * @brief Processes a user input and generates a chatbot response.
@@ -55,7 +55,7 @@ int fossil_io_chat_respond(fossil_jellyfish_chain *chain, const char *input, cha
  *
  * @return 0 on success.
  */
-int fossil_io_chat_end(void);
+int fossil_io_chat_end(fossil_jellyfish_chain *chain);
 
 /**
  * @brief Injects a system message into the chain (e.g. "Hello", "System Ready").
