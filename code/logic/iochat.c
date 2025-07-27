@@ -223,7 +223,7 @@ int fossil_io_chat_summarize_session(const fossil_jellyfish_chain *chain, char *
 int fossil_io_chat_filter_recent(const fossil_jellyfish_chain *chain, fossil_jellyfish_chain *out_chain, int turn_count) {
     if (!chain || !out_chain || turn_count <= 0) return -1;
 
-    fossil_jellyfish_init_chain(out_chain);
+    fossil_jellyfish_init(out_chain);
     int added = 0;
 
     for (int i = (int)chain->count - 1; i >= 0 && added < turn_count; --i) {
