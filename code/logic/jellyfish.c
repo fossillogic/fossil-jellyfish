@@ -1098,28 +1098,32 @@ int fossil_jellyfish_trim(fossil_jellyfish_chain *chain, size_t max_blocks) {
 }
 
 int fossil_jellyfish_chain_compact(fossil_jellyfish_chain *chain) {
-    if (!chain || chain->count == 0) return 0;
+    if (!chain) return -1;
 
+    size_t new_index = 0;
     size_t moved = 0;
-    size_t write_idx = 0;
 
-    for (size_t read_idx = 0; read_idx < chain->count; ++read_idx) {
-        if (chain->memory[read_idx].valid) {
-            if (write_idx != read_idx) {
-                chain->memory[write_idx] = chain->memory[read_idx];
+    for (size_t i = 0; i < chain->count; ++i) {
+        if (chain->memory[i].valid) {
+            if (i != new_index) {
+                chain->memory[new_index] = chain->memory[i];
                 ++moved;
             }
-            ++write_idx;
+            ++new_index;
         }
     }
 
-    // Zero out the remainder for safety
-    for (size_t i = write_idx; i < chain->count; ++i) {
+    // Zero out the rest
+    for (size_t i = new_index; i < chain->count; ++i)
         memset(&chain->memory[i], 0, sizeof(fossil_jellyfish_block));
-    }
 
-    chain->count = write_idx;
+    chain->count = new_index;
     return (int)moved;
+}
+
+uint64_t fossil_jellyfish_block_age(const fossil_jellyfish_block *block, uint64_t now) {
+    if (!block || block->timestamp > now) return 0;
+    return now - block->timestamp;
 }
 
 void fossil_jellyfish_block_explain(const fossil_jellyfish_block *block, char *out, size_t size) {
@@ -1133,6 +1137,43 @@ void fossil_jellyfish_block_explain(const fossil_jellyfish_block *block, char *o
              block->usage_count,
              block->immutable,
              block->valid);
+}
+
+const fossil_jellyfish_block *fossil_jellyfish_find_by_hash(const fossil_jellyfish_chain *chain, const uint8_t *hash) {
+    if (!chain || !hash) return NULL;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (b->valid && memcmp(b->hash, hash, FOSSIL_JELLYFISH_HASH_SIZE) == 0) {
+            return b;
+        }
+    }
+
+    return NULL;
+}
+
+int fossil_jellyfish_clone_chain(const fossil_jellyfish_chain *src, fossil_jellyfish_chain *dst) {
+    if (!src || !dst) return -1;
+
+    memcpy(dst, src, sizeof(fossil_jellyfish_chain));
+    return 0;
+}
+
+int fossil_jellyfish_filter_by_tag(const fossil_jellyfish_jellydsl *model, const char *tag, fossil_jellyfish_chain *out) {
+    if (!model || !tag || !out) return -1;
+
+    bool tag_match = false;
+    for (size_t i = 0; i < model->tag_count; ++i) {
+        if (strcmp(model->tags[i], tag) == 0) {
+            tag_match = true;
+            break;
+        }
+    }
+
+    if (!tag_match) return 0; // No match, return empty chain
+
+    memcpy(out, &model->chain, sizeof(fossil_jellyfish_chain));
+    return (int)out->count;
 }
 
 bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const char *input, char *out_output, float *out_confidence, const fossil_jellyfish_block **out_block) {
@@ -1167,7 +1208,30 @@ bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const 
     return false;
 }
 
+int fossil_jellyfish_block_sign(fossil_jellyfish_block *block, const uint8_t *priv_key) {
+    (void)priv_key;
+    if (!block) return -1;
 
+    // Stub: Fill signature field with hash XOR pattern
+    for (size_t i = 0; i < FOSSIL_SIGNATURE_SIZE; ++i) {
+        block->signature[i] = block->hash[i % FOSSIL_JELLYFISH_HASH_SIZE] ^ (uint8_t)i;
+    }
+
+    return 0;
+}
+
+bool fossil_jellyfish_block_verify_signature(const fossil_jellyfish_block *block, const uint8_t *pub_key) {
+    (void)pub_key;
+    if (!block) return false;
+
+    // Stub: Reconstruct the expected signature pattern and compare
+    for (size_t i = 0; i < FOSSIL_SIGNATURE_SIZE; ++i) {
+        uint8_t expected = block->hash[i % FOSSIL_JELLYFISH_HASH_SIZE] ^ (uint8_t)i;
+        if (block->signature[i] != expected) return false;
+    }
+
+    return true;
+}
 
 /**
  * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts models.
