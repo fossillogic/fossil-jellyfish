@@ -13,43 +13,180 @@
  */
 #include "fossil/ai/iochat.h"
 
-int fossil_io_chat_start(const char *context_name) {
-    (void)context_name;
-    // Placeholder: allocate context memory or log session start
+static char current_context_name[64] = {0};
+static time_t session_start_time = 0;
+static uint64_t session_id = 0;
+static FILE *session_log_file = NULL;
+
+
+// Helper: Format timestamp string
+static void format_timestamp(time_t t, char *buf, size_t size) {
+    struct tm *tm_info = localtime(&t);
+    strftime(buf, size, "%Y-%m-%d %H:%M:%S", tm_info);
+}
+
+// Helper: Open session log file for appending
+static int open_session_log(uint64_t id) {
+    char filename[128];
+    snprintf(filename, sizeof(filename), "session_%llu.log", (unsigned long long)id);
+    session_log_file = fopen(filename, "a");
+    return session_log_file ? 0 : -1;
+}
+
+// Helper: Close session log file
+static void close_session_log(void) {
+    if (session_log_file) {
+        fclose(session_log_file);
+        session_log_file = NULL;
+    }
+}
+
+// Logs a line to the session log (if open)
+static void log_session_line(const char *line) {
+    if (session_log_file) {
+        fprintf(session_log_file, "%s\n", line);
+        fflush(session_log_file);
+    }
+}
+
+// Add a system block to the chain
+static void record_system_block(fossil_jellyfish_chain *chain, const char *msg) {
+    if (!chain || !msg) return;
+
+    // Compose system input as [system] plus message
+    char input[FOSSIL_JELLYFISH_INPUT_SIZE];
+    snprintf(input, sizeof(input), "[system]");
+
+    // Output is the msg (truncate if needed)
+    char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];
+    strncpy(output, msg, sizeof(output) - 1);
+    output[sizeof(output) - 1] = '\0';
+
+    fossil_jellyfish_learn(chain, input, output);
+}
+
+// --- API Functions ---
+
+int fossil_io_chat_start(const char *context_name, fossil_jellyfish_chain *chain) {
+    if (context_name && strlen(context_name) < sizeof(current_context_name)) {
+        strncpy(current_context_name, context_name, sizeof(current_context_name) - 1);
+    } else {
+        strncpy(current_context_name, "default", sizeof(current_context_name) - 1);
+    }
+
+    session_start_time = time(NULL);
+    session_id = (uint64_t)session_start_time;
+
+    if (open_session_log(session_id) != 0) {
+        fprintf(stderr, "[fossil_io_chat] Warning: Could not open session log file.\n");
+    }
+
+    char ts[32];
+    format_timestamp(session_start_time, ts, sizeof(ts));
+
+    char log_line[256];
+    snprintf(log_line, sizeof(log_line), "Session started: %s @ %s", current_context_name, ts);
+    log_session_line(log_line);
+
+    if (chain) {
+        char system_msg[128];
+        snprintf(system_msg, sizeof(system_msg), "Session started with context \"%s\" at %s", current_context_name, ts);
+        record_system_block(chain, system_msg);
+    }
+
     return 0;
 }
 
 int fossil_io_chat_respond(fossil_jellyfish_chain *chain, const char *input, char *output, size_t size) {
     if (!chain || !input || !output || size == 0) return -1;
 
-    float confidence;
-    const fossil_jellyfish_block *block = NULL;
+    float confidence = 0.0f;
+    const fossil_jellyfish_block *matched_block = NULL;
 
-    if (fossil_jellyfish_reason_verbose(chain, input, output, &confidence, &block)) {
+    bool found = fossil_jellyfish_reason_verbose(chain, input, output, &confidence, &matched_block);
+
+    if (found && matched_block && confidence > 0.3f) {
+        char log_line[256];
+        snprintf(log_line, sizeof(log_line), "Input: \"%s\" → Output: \"%s\" (confidence: %.2f)", input, output, confidence);
+        log_session_line(log_line);
+
+        fossil_jellyfish_learn(chain, input, output);
         return 0;
     } else {
-        strncpy(output, "I'm not sure how to respond to that yet.", size - 1);
+        const char *fallback = "I'm not sure how to respond to that yet.";
+        strncpy(output, fallback, size - 1);
         output[size - 1] = '\0';
+
+        char log_line[256];
+        snprintf(log_line, sizeof(log_line), "Input: \"%s\" → Fallback response used", input);
+        log_session_line(log_line);
+
+        fossil_jellyfish_learn(chain, input, output);
         return -1;
     }
 }
 
-int fossil_io_chat_end(void) {
-    // Placeholder: cleanup session memory
+int fossil_io_chat_end(fossil_jellyfish_chain *chain) {
+    time_t now = time(NULL);
+    double duration = difftime(now, session_start_time);
+
+    char ts[32];
+    format_timestamp(now, ts, sizeof(ts));
+
+    char log_line[256];
+    snprintf(log_line, sizeof(log_line), "Session \"%s\" ended after %.2f seconds @ %s", current_context_name, duration, ts);
+    log_session_line(log_line);
+
+    if (chain) {
+        char system_msg[128];
+        snprintf(system_msg, sizeof(system_msg), "Session ended after %.2f seconds at %s", duration, ts);
+        record_system_block(chain, system_msg);
+    }
+
+    close_session_log();
+
+    memset(current_context_name, 0, sizeof(current_context_name));
+    session_start_time = 0;
+    session_id = 0;
+
     return 0;
 }
 
 int fossil_io_chat_inject_system_message(fossil_jellyfish_chain *chain, const char *message) {
-    if (!chain || !message) return -1;
+    if (!chain || !message || strlen(message) == 0) {
+        return -1;
+    }
 
+    if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM) {
+        fprintf(stderr, "[fossil_io_chat] Chain memory full, cannot inject system message.\n");
+        return -1;
+    }
+
+    // Add system message with input key "[system]"
     fossil_jellyfish_learn(chain, "[system]", message);
+
+    // Mark the newly added block as immutable to protect it
     fossil_jellyfish_mark_immutable(&chain->memory[chain->count - 1]);
+
+    printf("[fossil_io_chat] Injected system message: \"%s\"\n", message);
+
     return 0;
 }
 
 int fossil_io_chat_learn_response(fossil_jellyfish_chain *chain, const char *input, const char *output) {
-    if (!chain || !input || !output) return -1;
+    if (!chain || !input || !output || strlen(input) == 0 || strlen(output) == 0) {
+        return -1;
+    }
+
+    if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM) {
+        fprintf(stderr, "[fossil_io_chat] Chain memory full, cannot learn new response.\n");
+        return -1;
+    }
+
     fossil_jellyfish_learn(chain, input, output);
+
+    printf("[fossil_io_chat] Learned new response for input: \"%s\"\n", input);
+
     return 0;
 }
 
@@ -59,7 +196,7 @@ int fossil_io_chat_turn_count(const fossil_jellyfish_chain *chain) {
     int count = 0;
     for (size_t i = 0; i < chain->count; ++i) {
         if (chain->memory[i].valid &&
-            strncmp(chain->memory[i].input, "[system]", FOSSIL_JELLYFISH_INPUT_SIZE) != 0) {
+            strncmp(chain->memory[i].input, "[system]", sizeof("[system]") - 1) != 0) {
             ++count;
         }
     }
