@@ -1209,28 +1209,35 @@ bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const 
 }
 
 int fossil_jellyfish_block_sign(fossil_jellyfish_block *block, const uint8_t *priv_key) {
-    (void)priv_key;
     if (!block) return -1;
 
-    // Stub: Fill signature field with hash XOR pattern
-    for (size_t i = 0; i < FOSSIL_SIGNATURE_SIZE; ++i) {
-        block->signature[i] = block->hash[i % FOSSIL_JELLYFISH_HASH_SIZE] ^ (uint8_t)i;
+    char key_string[64];
+    if (priv_key) {
+        for (size_t i = 0; i < 32 && i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+            sprintf(&key_string[i*2], "%02x", priv_key[i]);
+    } else {
+        snprintf(key_string, sizeof(key_string), "default-key");
     }
 
+    fossil_jellyfish_hash((const char *)block->hash, key_string, block->signature);
     return 0;
 }
 
 bool fossil_jellyfish_block_verify_signature(const fossil_jellyfish_block *block, const uint8_t *pub_key) {
-    (void)pub_key;
     if (!block) return false;
 
-    // Stub: Reconstruct the expected signature pattern and compare
-    for (size_t i = 0; i < FOSSIL_SIGNATURE_SIZE; ++i) {
-        uint8_t expected = block->hash[i % FOSSIL_JELLYFISH_HASH_SIZE] ^ (uint8_t)i;
-        if (block->signature[i] != expected) return false;
+    uint8_t expected[FOSSIL_SIGNATURE_SIZE];
+    char key_string[64];
+    if (pub_key) {
+        for (size_t i = 0; i < 32 && i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+            sprintf(&key_string[i*2], "%02x", pub_key[i]);
+    } else {
+        snprintf(key_string, sizeof(key_string), "default-key");
     }
 
-    return true;
+    fossil_jellyfish_hash((const char *)block->hash, key_string, expected);
+
+    return memcmp(expected, block->signature, FOSSIL_SIGNATURE_SIZE) == 0;
 }
 
 /**
