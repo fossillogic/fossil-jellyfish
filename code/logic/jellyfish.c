@@ -1097,6 +1097,78 @@ int fossil_jellyfish_trim(fossil_jellyfish_chain *chain, size_t max_blocks) {
     return (int)removed;
 }
 
+int fossil_jellyfish_chain_compact(fossil_jellyfish_chain *chain) {
+    if (!chain || chain->count == 0) return 0;
+
+    size_t moved = 0;
+    size_t write_idx = 0;
+
+    for (size_t read_idx = 0; read_idx < chain->count; ++read_idx) {
+        if (chain->memory[read_idx].valid) {
+            if (write_idx != read_idx) {
+                chain->memory[write_idx] = chain->memory[read_idx];
+                ++moved;
+            }
+            ++write_idx;
+        }
+    }
+
+    // Zero out the remainder for safety
+    for (size_t i = write_idx; i < chain->count; ++i) {
+        memset(&chain->memory[i], 0, sizeof(fossil_jellyfish_block));
+    }
+
+    chain->count = write_idx;
+    return (int)moved;
+}
+
+void fossil_jellyfish_block_explain(const fossil_jellyfish_block *block, char *out, size_t size) {
+    if (!block || !out || size == 0) return;
+
+    snprintf(out, size,
+             "Input: '%s' | Output: '%s' | Conf: %.2f | Used: %u | Immutable: %d | Valid: %d",
+             block->input,
+             block->output,
+             block->confidence,
+             block->usage_count,
+             block->immutable,
+             block->valid);
+}
+
+bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const char *input, char *out_output, float *out_confidence, const fossil_jellyfish_block **out_block) {
+    if (!chain || !input) return false;
+
+    const fossil_jellyfish_block *best = NULL;
+    float best_conf = -1.0f;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        if (strncmp(b->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
+            if (b->confidence > best_conf ||
+                (b->confidence == best_conf && b->immutable && (!best || !best->immutable))) {
+                best = b;
+                best_conf = b->confidence;
+            }
+        }
+    }
+
+    if (best) {
+        if (out_output) strncpy(out_output, best->output, FOSSIL_JELLYFISH_OUTPUT_SIZE);
+        if (out_confidence) *out_confidence = best->confidence;
+        if (out_block) *out_block = best;
+        return true;
+    }
+
+    if (out_output) strncpy(out_output, "Unknown", FOSSIL_JELLYFISH_OUTPUT_SIZE);
+    if (out_confidence) *out_confidence = 0.0f;
+    if (out_block) *out_block = NULL;
+    return false;
+}
+
+
+
 /**
  * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts models.
  *
