@@ -1240,6 +1240,33 @@ bool fossil_jellyfish_block_verify_signature(const fossil_jellyfish_block *block
     return memcmp(expected, block->signature, FOSSIL_SIGNATURE_SIZE) == 0;
 }
 
+int fossil_jellyfish_append_block(fossil_jellyfish_chain *chain, const fossil_jellyfish_block *block) {
+    if (!chain || !block) return -1;
+
+    if (chain->count >= FOSSIL_JELLYFISH_MAX_BLOCKS) {
+        return -1; // Chain is full
+    }
+
+    fossil_jellyfish_block *dest = &chain->memory[chain->count];
+    memcpy(dest, block, sizeof(fossil_jellyfish_block));
+
+    // Auto-set derived metadata (if not already set)
+    if (!dest->hash[0]) {
+        fossil_jellyfish_hash_block(dest); // optional: hash if not present
+    }
+
+    dest->index = chain->count; // Optional: assign index if tracked
+    chain->count++;
+
+    return 0;
+}
+
+int fossil_jellyfish_learn_block(fossil_jellyfish_chain *chain, const fossil_jellyfish_block *block) {
+    if (!chain || !block) return -1;
+
+    return fossil_jellyfish_append_block(chain, block);
+}
+
 /**
  * Parses a .jellyfish (JellyDSL) file with Meson-like syntax and extracts models.
  *
