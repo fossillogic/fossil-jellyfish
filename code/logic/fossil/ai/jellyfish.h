@@ -140,24 +140,6 @@ void fossil_jellyfish_init(fossil_jellyfish_chain *chain);
 void fossil_jellyfish_learn(fossil_jellyfish_chain *chain, const char *input, const char *output);
 
 /**
- * @brief Learn a preconstructed block and append it to the chain.
- * 
- * @param chain Pointer to the chain where the block should be added.
- * @param block The block to insert. Must already be initialized and validated.
- * @return int 0 on success, non-zero on failure.
- */
-int fossil_jellyfish_learn_block(fossil_jellyfish_chain *chain, const fossil_jellyfish_block *block);
-
-/**
- * @brief Append a block to the chain’s memory.
- * 
- * @param chain Pointer to the jellyfish chain.
- * @param block Pointer to the block to copy and append.
- * @return int 0 on success, non-zero on failure (e.g., full chain).
- */
-int fossil_jellyfish_append_block(fossil_jellyfish_chain *chain, const fossil_jellyfish_block *block);
-
-/**
  * Reason about an input.
  * This searches the chain for a matching input and returns the corresponding output.
  * 
