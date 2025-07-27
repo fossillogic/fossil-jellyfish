@@ -132,6 +132,24 @@ int fossil_io_chat_export_history(const fossil_jellyfish_chain *chain, const cha
  */
 int fossil_io_chat_import_context(fossil_jellyfish_chain *chain, const char *filepath);
 
+/**
+ * @brief Export the given Jellyfish chain to a JSON-formatted .fish file.
+ *
+ * @param chain    Pointer to the chat block chain.
+ * @param filepath Path to the output file.
+ * @return 0 on success, -1 on failure.
+ */
+int fossil_io_chat_export_json(const fossil_jellyfish_chain *chain, const char *filepath);
+
+/**
+ * @brief Import a Jellyfish chat chain from a JSON-formatted .fish file.
+ *
+ * @param chain    Pointer to the chain to populate.
+ * @param filepath Path to the input file.
+ * @return 0 on success, -1 on failure.
+ */
+int fossil_io_chat_import_json(fossil_jellyfish_chain *chain, const char *filepath);
+
 #ifdef __cplusplus
 }
 #include <stdexcept>
