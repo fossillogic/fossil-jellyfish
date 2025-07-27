@@ -18,6 +18,19 @@ static time_t session_start_time = 0;
 static uint64_t session_id = 0;
 static FILE *session_log_file = NULL;
 
+const char *fossil_bytes_to_hex(const uint8_t *data, size_t len) {
+    static char hex[129];
+    for (size_t i = 0; i < len; ++i)
+        sprintf(&hex[i * 2], "%02x", data[i]);
+    hex[len * 2] = '\0';
+    return hex;
+}
+
+void fossil_hex_to_bytes(const char *hex, uint8_t *out, size_t out_len) {
+    for (size_t i = 0; i < out_len && hex[i * 2]; ++i) {
+        sscanf(&hex[i * 2], "%2hhx", &out[i]);
+    }
+}
 
 // Helper: Format timestamp string
 static void format_timestamp(time_t t, char *buf, size_t size) {
@@ -238,6 +251,106 @@ int fossil_io_chat_filter_recent(const fossil_jellyfish_chain *chain, fossil_jel
     }
 
     out_chain->count = added;
+    return 0;
+}
+
+int fossil_io_chat_export_json(const fossil_jellyfish_chain *chain, const char *filepath) {
+    if (!chain || !filepath) return -1;
+
+    FILE *f = fopen(filepath, "w");
+    if (!f) return -1;
+
+    fprintf(f, "{\n  \"signature\": \"JFS1\",\n  \"blocks\": [\n");
+
+    size_t count = 0;
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        if (count++ > 0)
+            fprintf(f, ",\n");
+
+        fprintf(f,
+            "    {\n"
+            "      \"input\": \"%s\",\n"
+            "      \"output\": \"%s\",\n"
+            "      \"hash\": \"%s\",\n"
+            "      \"timestamp\": %llu,\n"
+            "      \"delta_ms\": %u,\n"
+            "      \"duration_ms\": %u,\n"
+            "      \"valid\": %d,\n"
+            "      \"confidence\": %.2f,\n"
+            "      \"usage_count\": %u,\n"
+            "      \"device_id\": \"%s\",\n"
+            "      \"signature\": \"%s\"\n"
+            "    }",
+            b->input,
+            b->output,
+            fossil_bytes_to_hex(b->hash, FOSSIL_JELLYFISH_HASH_SIZE),
+            (unsigned long long)b->timestamp,
+            b->delta_ms,
+            b->duration_ms,
+            b->valid,
+            b->confidence,
+            b->usage_count,
+            b->device_id,
+            fossil_bytes_to_hex(b->signature, FOSSIL_SIGNATURE_SIZE)
+        );
+    }
+
+    fprintf(f, "\n  ]\n}\n");
+    fclose(f);
+    return 0;
+}
+
+int fossil_io_chat_import_json(fossil_jellyfish_chain *chain, const char *filepath) {
+    if (!chain || !filepath) return -1;
+
+    FILE *f = fopen(filepath, "r");
+    if (!f) return -1;
+
+    char line[1024];
+    fossil_jellyfish_init(chain);
+
+    fossil_jellyfish_block block;
+    memset(&block, 0, sizeof(block));
+
+    while (fgets(line, sizeof(line), f)) {
+        char *val;
+
+        if ((val = strstr(line, "\"input\""))) {
+            sscanf(val, "\"input\": \"%[^\"]", block.input);
+        } else if ((val = strstr(line, "\"output\""))) {
+            sscanf(val, "\"output\": \"%[^\"]", block.output);
+        } else if ((val = strstr(line, "\"hash\""))) {
+            char hex[65];
+            sscanf(val, "\"hash\": \"%64[^\"]", hex);
+            fossil_hex_to_bytes(hex, block.hash, FOSSIL_JELLYFISH_HASH_SIZE);
+        } else if ((val = strstr(line, "\"timestamp\""))) {
+            sscanf(val, "\"timestamp\": %llu", &block.timestamp);
+        } else if ((val = strstr(line, "\"delta_ms\""))) {
+            sscanf(val, "\"delta_ms\": %u", &block.delta_ms);
+        } else if ((val = strstr(line, "\"duration_ms\""))) {
+            sscanf(val, "\"duration_ms\": %u", &block.duration_ms);
+        } else if ((val = strstr(line, "\"valid\""))) {
+            sscanf(val, "\"valid\": %d", &block.valid);
+        } else if ((val = strstr(line, "\"confidence\""))) {
+            sscanf(val, "\"confidence\": %f", &block.confidence);
+        } else if ((val = strstr(line, "\"usage_count\""))) {
+            sscanf(val, "\"usage_count\": %u", &block.usage_count);
+        } else if ((val = strstr(line, "\"device_id\""))) {
+            sscanf(val, "\"device_id\": \"%16[^\"]", block.device_id);
+        } else if ((val = strstr(line, "\"signature\""))) {
+            char hex[65];
+            sscanf(val, "\"signature\": \"%64[^\"]", hex);
+            fossil_hex_to_bytes(hex, block.signature, FOSSIL_SIGNATURE_SIZE);
+        } else if (strchr(line, '}')) {
+            fossil_jellyfish_learn_block(chain, &block);
+            memset(&block, 0, sizeof(block)); // reset for next
+        }
+    }
+
+    fclose(f);
     return 0;
 }
 
