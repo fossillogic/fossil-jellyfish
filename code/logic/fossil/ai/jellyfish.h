@@ -431,15 +431,6 @@ int fossil_jellyfish_chain_compact(fossil_jellyfish_chain *chain);
 uint64_t fossil_jellyfish_block_age(const fossil_jellyfish_block *block, uint64_t now);
 
 /**
- * @brief Computes the age of a block relative to current time.
- *
- * @param block The memory block.
- * @param now   Current UNIX timestamp.
- * @return      Age in milliseconds.
- */
-uint64_t fossil_jellyfish_block_age(const fossil_jellyfish_block *block, uint64_t now);
-
-/**
  * @brief Returns a short diagnostic string for a block.
  *
  * Outputs a line including input, output, confidence, usage, and trust status.
