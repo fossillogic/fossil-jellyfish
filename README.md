@@ -4,12 +4,13 @@ Jellyfish is the core engine of Truthful Intelligence, a lightweight AI library 
 
 ## Key Features
 
-- **Cross-Platform**: Runs consistently on Windows, macOS, and Linux.
-- **No External Dependencies**: Written in pure C for maximum portability and minimal footprint.
-- **Blockchain-Inspired Memory**: Stores each interaction as a cryptographically hashed block, forming a tamper-resistant chain for transparent and verifiable learning.
-- **Self-Pruning**: Automatically removes outdated or irrelevant data to maintain efficiency.
-- **Traceable Reasoning**: Every decision and memory is auditable, supporting trust-critical applications.
-- **Configurable and Modular**: Easily tailored for embedded, desktop, or custom AI projects.
+Key Features
+	•	Cross-Platform: Runs reliably on Windows, macOS, Linux, and embedded systems.
+	•	Zero Dependencies: Written entirely in pure C for maximum portability, auditability, and minimal footprint.
+	•	Blockchain-Inspired Memory: Every input, output, and decision is stored as a cryptographically hashed block, creating a tamper-resistant, traceable chain of logic.
+	•	Self-Pruning Engine: Automatically removes obsolete or conflicting data, preserving clarity and consistency over time.
+	•	Fully Auditable Reasoning: Supports forensic-level inspection of every decision, enabling ethical and transparent AI behavior.
+	•	Modular and Configurable: Built to be embedded, extended, or customized for Truthful Intelligence applications across any platform.
 
 ## Prerequisites
 
@@ -37,7 +38,7 @@ To get started with Jellyfish, ensure you have the following installed:
    # ======================
    [wrap-git]
    url = https://github.com/fossillogic/fossil-jellyfish.git
-   revision = v0.1.1
+   revision = v0.1.2
 
    [provide]
    fossil-jellyfish = fossil_fish_dep
