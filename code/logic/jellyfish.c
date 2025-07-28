@@ -12,15 +12,6 @@
  * -----------------------------------------------------------------------------
  */
 #include "fossil/ai/jellyfish.h"
-#include <inttypes.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <float.h>
-#include <time.h>
-#include <math.h>
-
 
 // HASH Algorithm magic
 
@@ -767,17 +758,71 @@ int fossil_jellyfish_detect_conflict(const fossil_jellyfish_chain *chain, const 
     return 0;
 }
 
+const fossil_jellyfish_block* fossil_jellyfish_best_match(const fossil_jellyfish_chain *chain, const char *input) {
+    if (!chain || !input || chain->count == 0) return NULL;
+
+    const fossil_jellyfish_block *best = NULL;
+    float best_confidence = -FLT_MAX;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+
+        if (!block->valid) continue;
+        if (strncmp(block->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) != 0) continue;
+
+        if (block->confidence > best_confidence) {
+            best = block;
+            best_confidence = block->confidence;
+        } else if (block->confidence == best_confidence && block->immutable && (!best || !best->immutable)) {
+            // Prefer immutable blocks in case of tie
+            best = block;
+        }
+    }
+
+    return best;
+}
+
 void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
+    if (!chain || chain->count == 0) {
+        printf("== Jellyfish Self-Reflection ==\n");
+        printf("No memories available.\n");
+        printf("================================\n");
+        return;
+    }
+
+    size_t valid = 0;
+    float confidence_sum = 0.0f;
+    float confidence_min = 1.0f, confidence_max = 0.0f;
+    uint64_t usage_sum = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) continue;
+        valid++;
+        confidence_sum += block->confidence;
+        usage_sum += block->usage_count;
+
+        if (block->confidence < confidence_min) confidence_min = block->confidence;
+        if (block->confidence > confidence_max) confidence_max = block->confidence;
+    }
+
+    float coverage = (chain->count > 0) ? (float)valid / (float)chain->count : 0.0f;
+    float confidence_avg = (valid > 0) ? confidence_sum / valid : 0.0f;
+
     printf("== Jellyfish Self-Reflection ==\n");
-    printf("Total Memories: %llu\n", (unsigned long long)chain->count);
-    printf("Valid Memories: %llu\n", (unsigned long long)(fossil_jellyfish_knowledge_coverage(chain) * chain->count));
+    printf("Total Memories  : %llu\n", (unsigned long long)chain->count);
+    printf("Valid Memories  : %llu (%.1f%%)\n", (unsigned long long)valid, coverage * 100.0f);
+    printf("Avg Confidence  : %.3f\n", confidence_avg);
+    printf("Min Confidence  : %.3f\n", confidence_min);
+    printf("Max Confidence  : %.3f\n", confidence_max);
+    printf("Total Usage     : %llu\n", (unsigned long long)usage_sum);
 
     const fossil_jellyfish_block *best = fossil_jellyfish_best_memory(chain);
     if (best) {
-        printf("Strongest Memory:\n");
+        printf("\nStrongest Memory:\n");
         printf("  Input      : %s\n", best->input);
         printf("  Output     : %s\n", best->output);
-        printf("  Confidence : %.2f\n", best->confidence);
+        printf("  Confidence : %.3f\n", best->confidence);
         printf("  Usage Count: %u\n", best->usage_count);
         printf("  Timestamp  : %" PRIu64 "\n", best->timestamp);
         printf("  Delta ms   : %u\n", best->delta_ms);
@@ -801,8 +846,9 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain) {
         }
         printf("\n");
     } else {
-        printf("No confident memories yet.\n");
+        printf("No confident memories found.\n");
     }
+
     printf("================================\n");
 }
 
@@ -822,14 +868,376 @@ bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block) {
 }
 
 bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain) {
-    if (!chain) return false;
+    if (!chain || chain->count == 0) return false;
 
-    // Check each block in the chain
     for (size_t i = 0; i < chain->count; i++) {
-        if (!fossil_jellyfish_verify_block(&chain->memory[i])) return false;
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        if (!fossil_jellyfish_verify_block(block)) {
+            return false;
+        }
     }
 
     return true;
+}
+
+void fossil_jellyfish_validation_report(const fossil_jellyfish_chain *chain) {
+    if (!chain) {
+        printf("[Validation] Chain is NULL\n");
+        return;
+    }
+
+    printf("== Jellyfish Chain Validation Report ==\n");
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        printf("Block %lu: ", (unsigned long)i);
+
+        if (!block->valid) {
+            printf("Invalid\n");
+            continue;
+        }
+
+        bool ok = fossil_jellyfish_verify_block(block);
+        printf("%s\n", ok ? "OK" : "Failed");
+    }
+    printf("=======================================\n");
+}
+
+float fossil_jellyfish_chain_trust_score(const fossil_jellyfish_chain *chain) {
+    if (!chain || chain->count == 0) return 0.0f;
+
+    float total_conf = 0.0f;
+    size_t valid_count = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *block = &chain->memory[i];
+        if (!block->valid) continue;
+        if (block->immutable && block->confidence >= 0.9f) {
+            total_conf += block->confidence;
+            ++valid_count;
+        }
+    }
+
+    return valid_count ? total_conf / valid_count : 0.0f;
+}
+
+void fossil_jellyfish_mark_immutable(fossil_jellyfish_block *block) {
+    if (block) {
+        block->immutable = 1;
+    }
+}
+
+int fossil_jellyfish_prune_chain(fossil_jellyfish_chain *chain, float min_confidence) {
+    if (!chain || chain->count == 0) return 0;
+    int pruned = 0;
+
+    for (size_t i = 0; i < chain->count; ) {
+        fossil_jellyfish_block *block = &chain->memory[i];
+
+        if (!block->valid || block->confidence < min_confidence) {
+            // Shift the rest down
+            memmove(&chain->memory[i], &chain->memory[i + 1], sizeof(fossil_jellyfish_block) * (chain->count - i - 1));
+            chain->count--;
+            pruned++;
+            // Do not increment i, as we now have a new block at this index
+        } else {
+            i++;
+        }
+    }
+
+    return pruned;
+}
+
+int fossil_jellyfish_deduplicate_chain(fossil_jellyfish_chain *chain) {
+    if (!chain || chain->count < 2) return 0;
+    int removed = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        fossil_jellyfish_block *a = &chain->memory[i];
+
+        for (size_t j = i + 1; j < chain->count; ) {
+            fossil_jellyfish_block *b = &chain->memory[j];
+            if (strcmp(a->input, b->input) == 0 && strcmp(a->output, b->output) == 0) {
+                // Remove duplicate b
+                memmove(&chain->memory[j], &chain->memory[j + 1], sizeof(fossil_jellyfish_block) * (chain->count - j - 1));
+                chain->count--;
+                removed++;
+            } else {
+                j++;
+            }
+        }
+    }
+
+    return removed;
+}
+
+static void trim_whitespace(char *str) {
+    if (!str) return;
+    
+    // Trim leading
+    char *start = str;
+    while (isspace((unsigned char)*start)) start++;
+
+    // Move trimmed start to front
+    if (start != str) memmove(str, start, strlen(start) + 1);
+
+    // Trim trailing
+    size_t len = strlen(str);
+    while (len > 0 && isspace((unsigned char)str[len - 1])) str[--len] = '\0';
+}
+
+int fossil_jellyfish_compress_chain(fossil_jellyfish_chain *chain) {
+    if (!chain) return 0;
+    int modified = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        fossil_jellyfish_block *block = &chain->memory[i];
+        size_t orig_input_len = strlen(block->input);
+        size_t orig_output_len = strlen(block->output);
+
+        trim_whitespace(block->input);
+        trim_whitespace(block->output);
+
+        if (strlen(block->input) != orig_input_len || strlen(block->output) != orig_output_len) {
+            modified++;
+        }
+    }
+
+    return modified;
+}
+
+int fossil_jellyfish_redact_block(fossil_jellyfish_block *block) {
+    if (!block) return -1;
+    strncpy(block->input, "***REDACTED***", FOSSIL_JELLYFISH_INPUT_SIZE);
+    strncpy(block->output, "***REDACTED***", FOSSIL_JELLYFISH_OUTPUT_SIZE);
+    memset(block->hash, 0, FOSSIL_JELLYFISH_HASH_SIZE);
+    block->confidence = 0.0f;
+    return 0;
+}
+
+void fossil_jellyfish_chain_stats(const fossil_jellyfish_chain *chain, size_t *out_valid_count, float *out_avg_confidence, float *out_immutable_ratio) {
+    if (!chain) return;
+    size_t valid = 0, immutable = 0;
+    float confidence_sum = 0.0f;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        valid++;
+        confidence_sum += b->confidence;
+        if (b->immutable) immutable++;
+    }
+
+    if (out_valid_count) *out_valid_count = valid;
+    if (out_avg_confidence) *out_avg_confidence = valid ? (confidence_sum / valid) : 0.0f;
+    if (out_immutable_ratio) *out_immutable_ratio = valid ? ((float)immutable / valid) : 0.0f;
+}
+
+int fossil_jellyfish_compare_chains(const fossil_jellyfish_chain *a, const fossil_jellyfish_chain *b) {
+    if (!a || !b) return -1;
+    int diff_count = 0;
+
+    size_t max = (a->count > b->count) ? a->count : b->count;
+    for (size_t i = 0; i < max; ++i) {
+        const fossil_jellyfish_block *ba = (i < a->count) ? &a->memory[i] : NULL;
+        const fossil_jellyfish_block *bb = (i < b->count) ? &b->memory[i] : NULL;
+
+        if (!ba || !bb || memcmp(ba->hash, bb->hash, FOSSIL_JELLYFISH_HASH_SIZE) != 0) {
+            diff_count++;
+        }
+    }
+    return diff_count;
+}
+
+#define ROTL8(x, r) ((uint8_t)(((x) << (r)) | ((x) >> (8 - (r)))))
+
+void fossil_jellyfish_chain_fingerprint(const fossil_jellyfish_chain *chain, uint8_t *out_hash) {
+    if (!chain || !out_hash) return;
+
+    // Initialize hash with a known non-zero pattern (e.g. 0xA5)
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+        out_hash[i] = (uint8_t)(0xA5 ^ i);
+
+    // Mix each block’s hash and timestamp into the output buffer
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j) {
+            uint8_t h = b->hash[j];
+            uint8_t t = ((uint8_t *)&b->timestamp)[j % sizeof(uint64_t)];
+            // Rotate and mix with primes for diffusion
+            uint8_t rotated = ROTL8(h ^ t, (j % 7) + 1);
+            out_hash[j] ^= rotated ^ (j * 31 + i * 17);
+        }
+
+        // Mix in confidence and usage (optional but helpful)
+        uint8_t conf = (uint8_t)(b->confidence * 255.0f);
+        uint8_t usage = (uint8_t)(b->usage_count & 0xFF);
+        out_hash[i % FOSSIL_JELLYFISH_HASH_SIZE] ^= conf ^ usage;
+    }
+}
+
+int fossil_jellyfish_trim(fossil_jellyfish_chain *chain, size_t max_blocks) {
+    if (!chain || chain->count <= max_blocks) return 0;
+
+    // Sort by confidence descending
+    for (size_t i = 0; i < chain->count - 1; ++i) {
+        for (size_t j = i + 1; j < chain->count; ++j) {
+            if (chain->memory[j].confidence > chain->memory[i].confidence) {
+                fossil_jellyfish_block tmp = chain->memory[i];
+                chain->memory[i] = chain->memory[j];
+                chain->memory[j] = tmp;
+            }
+        }
+    }
+
+    size_t removed = chain->count - max_blocks;
+    chain->count = max_blocks;
+    return (int)removed;
+}
+
+int fossil_jellyfish_chain_compact(fossil_jellyfish_chain *chain) {
+    if (!chain) return -1;
+
+    size_t new_index = 0;
+    size_t moved = 0;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        if (chain->memory[i].valid) {
+            if (i != new_index) {
+                chain->memory[new_index] = chain->memory[i];
+                ++moved;
+            }
+            ++new_index;
+        }
+    }
+
+    // Zero out the rest
+    for (size_t i = new_index; i < chain->count; ++i)
+        memset(&chain->memory[i], 0, sizeof(fossil_jellyfish_block));
+
+    chain->count = new_index;
+    return (int)moved;
+}
+
+uint64_t fossil_jellyfish_block_age(const fossil_jellyfish_block *block, uint64_t now) {
+    if (!block || block->timestamp > now) return 0;
+    return now - block->timestamp;
+}
+
+void fossil_jellyfish_block_explain(const fossil_jellyfish_block *block, char *out, size_t size) {
+    if (!block || !out || size == 0) return;
+
+    snprintf(out, size,
+             "Input: '%s' | Output: '%s' | Conf: %.2f | Used: %u | Immutable: %d | Valid: %d",
+             block->input,
+             block->output,
+             block->confidence,
+             block->usage_count,
+             block->immutable,
+             block->valid);
+}
+
+const fossil_jellyfish_block *fossil_jellyfish_find_by_hash(const fossil_jellyfish_chain *chain, const uint8_t *hash) {
+    if (!chain || !hash) return NULL;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (b->valid && memcmp(b->hash, hash, FOSSIL_JELLYFISH_HASH_SIZE) == 0) {
+            return b;
+        }
+    }
+
+    return NULL;
+}
+
+int fossil_jellyfish_clone_chain(const fossil_jellyfish_chain *src, fossil_jellyfish_chain *dst) {
+    if (!src || !dst) return -1;
+
+    memcpy(dst, src, sizeof(fossil_jellyfish_chain));
+    return 0;
+}
+
+int fossil_jellyfish_filter_by_tag(const fossil_jellyfish_jellydsl *model, const char *tag, fossil_jellyfish_chain *out) {
+    if (!model || !tag || !out) return -1;
+
+    bool tag_match = false;
+    for (size_t i = 0; i < model->tag_count; ++i) {
+        if (strcmp(model->tags[i], tag) == 0) {
+            tag_match = true;
+            break;
+        }
+    }
+
+    if (!tag_match) return 0; // No match, return empty chain
+
+    memcpy(out, &model->chain, sizeof(fossil_jellyfish_chain));
+    return (int)out->count;
+}
+
+bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const char *input, char *out_output, float *out_confidence, const fossil_jellyfish_block **out_block) {
+    if (!chain || !input) return false;
+
+    const fossil_jellyfish_block *best = NULL;
+    float best_conf = -1.0f;
+
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
+
+        if (strncmp(b->input, input, FOSSIL_JELLYFISH_INPUT_SIZE) == 0) {
+            if (b->confidence > best_conf ||
+                (b->confidence == best_conf && b->immutable && (!best || !best->immutable))) {
+                best = b;
+                best_conf = b->confidence;
+            }
+        }
+    }
+
+    if (best) {
+        if (out_output) strncpy(out_output, best->output, FOSSIL_JELLYFISH_OUTPUT_SIZE);
+        if (out_confidence) *out_confidence = best->confidence;
+        if (out_block) *out_block = best;
+        return true;
+    }
+
+    if (out_output) strncpy(out_output, "Unknown", FOSSIL_JELLYFISH_OUTPUT_SIZE);
+    if (out_confidence) *out_confidence = 0.0f;
+    if (out_block) *out_block = NULL;
+    return false;
+}
+
+int fossil_jellyfish_block_sign(fossil_jellyfish_block *block, const uint8_t *priv_key) {
+    if (!block) return -1;
+
+    char key_string[64];
+    if (priv_key) {
+        for (size_t i = 0; i < 32 && i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+            sprintf(&key_string[i*2], "%02x", priv_key[i]);
+    } else {
+        snprintf(key_string, sizeof(key_string), "default-key");
+    }
+
+    fossil_jellyfish_hash((const char *)block->hash, key_string, block->signature);
+    return 0;
+}
+
+bool fossil_jellyfish_block_verify_signature(const fossil_jellyfish_block *block, const uint8_t *pub_key) {
+    if (!block) return false;
+
+    uint8_t expected[FOSSIL_SIGNATURE_SIZE];
+    char key_string[64];
+    if (pub_key) {
+        for (size_t i = 0; i < 32 && i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+            sprintf(&key_string[i*2], "%02x", pub_key[i]);
+    } else {
+        snprintf(key_string, sizeof(key_string), "default-key");
+    }
+
+    fossil_jellyfish_hash((const char *)block->hash, key_string, expected);
+
+    return memcmp(expected, block->signature, FOSSIL_SIGNATURE_SIZE) == 0;
 }
 
 /**

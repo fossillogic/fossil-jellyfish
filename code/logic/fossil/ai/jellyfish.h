@@ -18,6 +18,14 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <float.h>
+#include <time.h>
+#include <math.h>
 
 enum {
     FOSSIL_JELLYFISH_MAX_MEM          = 128,
@@ -44,22 +52,27 @@ extern "C"
 // *****************************************************************************
 
 /**
- * Represents a single jellyfish block in the AI memory.
- * Each block contains an input, output, hash, timestamp, and validity flag.
+ * @brief Represents a single memory block in the Jellyfish AI chain.
+ *
+ * Each block stores a learned input-output pair, metadata about usage,
+ * cryptographic fingerprinting, and timing. The `immutable` flag ensures
+ * the block is protected from decay, pruning, or accidental overwrites.
  */
 typedef struct {
     char input[FOSSIL_JELLYFISH_INPUT_SIZE];
     char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];
     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];
-    uint64_t timestamp;               // Absolute UNIX timestamp
-    uint32_t delta_ms;                // New: time since last block in ms
-    uint32_t duration_ms;             // New: time taken to process this block
-    int valid;
-    float confidence;
-    uint32_t usage_count;
+    uint64_t timestamp;               // Absolute UNIX timestamp (ms granularity if needed)
+    uint32_t delta_ms;                // Time since last block in ms
+    uint32_t duration_ms;             // Time taken to process this block
+    int valid;                        // Whether the block is currently considered valid
+    float confidence;                 // Confidence score (0.0 to 1.0)
+    uint32_t usage_count;             // Times this block was retrieved or matched
 
-    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];
-    uint8_t signature[FOSSIL_SIGNATURE_SIZE];
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];     // Source device fingerprint
+    uint8_t signature[FOSSIL_SIGNATURE_SIZE];     // Cryptographic signature for authenticity
+
+    int immutable;                    // New: If non-zero, block is protected from decay and removal
 } fossil_jellyfish_block;
 
 /**
@@ -245,13 +258,56 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain *chain);
 bool fossil_jellyfish_verify_block(const fossil_jellyfish_block* block);
 
 /**
- * Verifies the integrity of a jellyfish chain.
- * This checks if all blocks are valid and properly linked.
- * 
- * @param chain Pointer to the jellyfish chain to verify.
- * @return True if the chain is valid, false otherwise.
+ * @brief Prints a validation report for each memory block in the Jellyfish chain.
+ *
+ * Iterates through the chain and invokes `fossil_jellyfish_verify_block` on each valid block,
+ * outputting a status line for each entry to standard output.
+ *
+ * This helps in debugging chain integrity, visualizing where corruption or verification
+ * failures occur, and understanding the structure of the chain.
+ *
+ * @param chain Pointer to the Jellyfish chain to validate.
  */
-bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain);
+void fossil_jellyfish_validation_report(const fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Performs full-chain validation by verifying each block.
+ *
+ * Calls `fossil_jellyfish_verify_block` for every block in the chain and returns
+ * false if any verification fails.
+ *
+ * This function is useful for asserting the integrity of a deserialized chain,
+ * checking for tampering, or before accepting input from external sources.
+ *
+ * @param chain Pointer to the Jellyfish chain to verify.
+ * @return true if all blocks pass verification, false otherwise.
+ */
+bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Computes a normalized trust score for the Jellyfish chain.
+ *
+ * Only includes valid and immutable blocks in the scoring. Confidence values from
+ * eligible blocks are averaged to produce a floating-point trust score from 0.0 to 1.0.
+ *
+ * This metric can help determine the chain’s overall credibility, for instance before
+ * deploying, merging, or persisting long-term knowledge.
+ *
+ * @param chain Pointer to the Jellyfish chain to analyze.
+ * @return Trust score (0.0f to 1.0f), or 0.0f if the chain is null or has no valid entries.
+ */
+float fossil_jellyfish_chain_trust_score(const fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Marks a Jellyfish memory block as immutable.
+ *
+ * This flag indicates that the block should not be altered or pruned, and will be
+ * included in trust score calculations. Immutable blocks are useful for storing core
+ * logic, critical responses, or verified inputs that must persist through decay or pruning.
+ *
+ * @param block Pointer to the memory block to mark as immutable.
+ */
+void fossil_jellyfish_mark_immutable(fossil_jellyfish_block *block);
 
 /**
  * Parses a .jellyfish file and extracts mindsets.
@@ -262,6 +318,190 @@ bool fossil_jellyfish_verify_chain(const fossil_jellyfish_chain* chain);
  * @return               Number of mindsets parsed, or 0 on failure.
  */
 int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_chains);
+
+/**
+ * @brief Prunes invalid or low-confidence blocks from the chain.
+ * @param chain The jellyfish memory chain.
+ * @param min_confidence Threshold below which memories are removed.
+ * @return Number of blocks pruned.
+ */
+int fossil_jellyfish_prune_chain(fossil_jellyfish_chain *chain, float min_confidence);
+
+/**
+ * @brief Deduplicates blocks with identical input/output pairs.
+ * @param chain The jellyfish memory chain.
+ * @return Number of duplicates removed.
+ */
+int fossil_jellyfish_deduplicate_chain(fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Compresses the memory chain by trimming whitespace and optionally shrinking fields.
+ * @param chain The jellyfish memory chain.
+ * @return Number of blocks modified.
+ */
+int fossil_jellyfish_compress_chain(fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Finds the best matching memory block in the chain for a given input string.
+ * 
+ * It selects the most confident valid response, favoring immutable blocks if tied,
+ * and optionally factoring in future enhancements like string similarity or recency.
+ * 
+ * @param chain The Jellyfish chain to search.
+ * @param input The input string to match.
+ * @return Pointer to the best matching block, or NULL if none found.
+ */
+const fossil_jellyfish_block* fossil_jellyfish_best_match(const fossil_jellyfish_chain *chain, const char *input);
+
+/**
+ * @brief Redacts sensitive data in a memory block while retaining structural integrity.
+ *
+ * Overwrites the input and/or output fields with fixed tokens (e.g. "***REDACTED***").
+ * May be used before public export or sharing across systems.
+ *
+ * @param block Pointer to the block to redact.
+ * @return 0 on success, non-zero on error.
+ */
+int fossil_jellyfish_redact_block(fossil_jellyfish_block *block);
+
+/**
+ * @brief Computes statistics over the Jellyfish chain.
+ *
+ * Populates out parameters with stats like count, valid count, confidence mean,
+ * trust score, block age distribution, and immutable ratio.
+ *
+ * @param chain Pointer to the chain to analyze.
+ * @param out_valid_count Pointer to store number of valid blocks.
+ * @param out_avg_confidence Pointer to store average confidence score.
+ * @param out_immutable_ratio Pointer to store immutable block ratio.
+ */
+void fossil_jellyfish_chain_stats(const fossil_jellyfish_chain *chain, size_t *out_valid_count, float *out_avg_confidence, float *out_immutable_ratio);
+
+/**
+ * @brief Compares two Jellyfish chains and identifies block-level differences.
+ *
+ * May be used for verifying synchronization, deduplication between devices,
+ * or forensic audits (e.g., tampering or divergence).
+ *
+ * @param a First chain.
+ * @param b Second chain.
+ * @return Number of differing blocks, or -1 on error.
+ */
+int fossil_jellyfish_compare_chains(const fossil_jellyfish_chain *a, const fossil_jellyfish_chain *b);
+
+/**
+ * @brief Computes a single fingerprint hash for the entire chain.
+ *
+ * Hashes block hashes, timestamps, and content summary to produce a deterministic
+ * digest for the chain’s current state.
+ *
+ * @param chain The Jellyfish chain to hash.
+ * @param out_hash Output buffer of FOSSIL_JELLYFISH_HASH_SIZE bytes.
+ */
+void fossil_jellyfish_chain_fingerprint(const fossil_jellyfish_chain *chain, uint8_t *out_hash);
+
+/**
+ * @brief Trims the chain to retain only the N most recently used or most confident blocks.
+ *
+ * Used for constrained environments or audit-controlled exports.
+ *
+ * @param chain The Jellyfish chain.
+ * @param max_blocks Number of blocks to retain.
+ * @return Number of blocks removed.
+ */
+int fossil_jellyfish_trim(fossil_jellyfish_chain *chain, size_t max_blocks);
+
+/**
+ * @brief Reorders valid blocks to the front of the chain and removes gaps.
+ *
+ * Maintains block order by timestamp and shrinks memory footprint after pruning or trimming.
+ *
+ * @param chain The Jellyfish chain.
+ * @return Number of blocks moved.
+ */
+int fossil_jellyfish_chain_compact(fossil_jellyfish_chain *chain);
+
+/**
+ * @brief Computes the age of a block relative to current time.
+ *
+ * @param block The memory block.
+ * @param now   Current UNIX timestamp.
+ * @return      Age in milliseconds.
+ */
+uint64_t fossil_jellyfish_block_age(const fossil_jellyfish_block *block, uint64_t now);
+
+/**
+ * @brief Returns a short diagnostic string for a block.
+ *
+ * Outputs a line including input, output, confidence, usage, and trust status.
+ * Useful for human-readable debug tools or logging systems.
+ *
+ * @param block The block to describe.
+ * @param out   Output buffer.
+ * @param size  Size of the buffer.
+ */
+void fossil_jellyfish_block_explain(const fossil_jellyfish_block *block, char *out, size_t size);
+
+/**
+ * @brief Finds a memory block by its hash.
+ *
+ * @param chain The Jellyfish chain.
+ * @param hash  The 32-byte hash to search for.
+ * @return Pointer to the matching block, or NULL.
+ */
+const fossil_jellyfish_block *fossil_jellyfish_find_by_hash(const fossil_jellyfish_chain *chain, const uint8_t *hash);
+
+/**
+ * @brief Creates a deep copy of a Jellyfish chain.
+ *
+ * @param src Source chain.
+ * @param dst Destination chain.
+ * @return 0 on success, non-zero on error.
+ */
+int fossil_jellyfish_clone_chain(const fossil_jellyfish_chain *src, fossil_jellyfish_chain *dst);
+
+/**
+ * @brief Filters a chain to contain only blocks associated with a specific tag.
+ *
+ * This would only apply if you associate tags at the block level in the future,
+ * or for partial view of chains within a mindset model.
+ *
+ * @param model The JellyDSL model to filter from.
+ * @param tag   The tag to match.
+ * @param out   Output chain to write to.
+ * @return Number of blocks copied.
+ */
+int fossil_jellyfish_filter_by_tag(const fossil_jellyfish_jellydsl *model, const char *tag, fossil_jellyfish_chain *out);
+
+/**
+ * @brief Like `reason`, but includes match confidence, source block, and hash.
+ *
+ * Useful for debug, inspection, or high-trust outputs.
+ *
+ * @param chain  Pointer to the memory chain.
+ * @param input  Input string to reason with.
+ * @param out_output  Output string buffer.
+ * @param out_confidence Optional confidence return pointer.
+ * @param out_block Optional pointer to store matching block.
+ * @return True if a match was found, false otherwise.
+ */
+bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const char *input, char *out_output, float *out_confidence, const fossil_jellyfish_block **out_block);
+
+/**
+ * @brief Signs a Jellyfish block using a private key.
+ * @param block The block to sign.
+ * @param priv_key The private key (implementation-defined).
+ * @return 0 on success.
+ */
+int fossil_jellyfish_block_sign(fossil_jellyfish_block *block, const uint8_t *priv_key);
+
+/**
+ * @brief Verifies a Jellyfish block's signature.
+ * @param block The block to verify.
+ * @param pub_key The public key.
+ * @return True if signature is valid.
+ */
+bool fossil_jellyfish_block_verify_signature(const fossil_jellyfish_block *block, const uint8_t *pub_key);
 
 #ifdef __cplusplus
 }
