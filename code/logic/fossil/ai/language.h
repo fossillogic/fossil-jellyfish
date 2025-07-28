@@ -89,6 +89,30 @@ void fossil_lang_extract_focus(const char *input, char *out, size_t out_size);
  */
 float fossil_lang_estimate_trust(const fossil_jellyfish_chain *chain, const char *input);
 
+/**
+ * Replace slang and contractions with formal equivalents.
+ * This is a fixed-rule version (extendable).
+ */
+void fossil_lang_normalize(const char *input, char *out, size_t out_size);
+
+/**
+ * Extracts key content from the first few meaningful tokens.
+ * Simple lead-based summarization.
+ */
+void fossil_lang_summarize(const char *input, char *out, size_t out_size);
+
+/**
+ * Extracts a "focus word" — usually a noun or key concept — from the input.
+ * Current version uses simple heuristics and common stopwords.
+ */
+void fossil_lang_extract_focus(const char *input, char *out, size_t out_size);
+
+/**
+ * Simple bag-of-words overlap similarity between two strings.
+ * Returns a float between 0.0 (no overlap) and 1.0 (identical sets).
+ */
+float fossil_lang_similarity(const char *a, const char *b);
+
 #ifdef __cplusplus
 }
 #include <stdexcept>
