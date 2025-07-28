@@ -13,108 +13,108 @@
  */
 #include "fossil/ai/language.h"
 
-static const char *stopwords[] = {
-    "the", "and", "is", "a", "an", "to", "of", "in", "on", "with", "for", NULL
-};
+size_t fossil_lang_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens) {
+    size_t count = 0, len = strlen(input);
+    char word[FOSSIL_JELLYFISH_TOKEN_SIZE] = {0};
+    size_t wi = 0;
 
-void fossil_lang_normalize(char *text) {
-    for (char *p = text; *p; ++p) {
-        *p = (char)tolower((unsigned char)*p);
-        if (!isalnum(*p) && !isspace(*p)) *p = ' ';
-    }
-}
-
-size_t fossil_lang_tokenize(const char *input, fossil_lang_token *tokens, size_t max_tokens) {
-    size_t count = 0;
-    const char *start = NULL;
-    for (const char *p = input; *p && count < max_tokens; ++p) {
-        if (isalnum(*p)) {
-            if (!start) start = p;
-        } else if (start) {
-            tokens[count++] = (fossil_lang_token){start, (size_t)(p - start)};
-            start = NULL;
+    for (size_t i = 0; i <= len; ++i) {
+        char c = input[i];
+        if (isalnum(c)) {
+            if (wi < FOSSIL_JELLYFISH_TOKEN_SIZE - 1)
+                word[wi++] = tolower(c);
+        } else {
+            if (wi > 0 && count < max_tokens) {
+                word[wi] = '\0';
+                strncpy(tokens[count++], word, FOSSIL_JELLYFISH_TOKEN_SIZE);
+                wi = 0;
+            }
         }
-    }
-    if (start && count < max_tokens) {
-        tokens[count++] = (fossil_lang_token){start, strlen(start)};
     }
     return count;
 }
 
-int fossil_lang_is_stopword(const char *word, size_t length) {
-    for (int i = 0; stopwords[i]; ++i) {
-        if (strlen(stopwords[i]) == length && strncmp(word, stopwords[i], length) == 0) {
-            return 1;
-        }
+bool fossil_lang_is_question(const char *input) {
+    size_t len = strlen(input);
+    if (len == 0) return false;
+
+    if (input[len - 1] == '?') return true;
+
+    const char *wh[] = {"what", "why", "how", "who", "when", "where", "is", "are", "do", "does", "can"};
+    char first[16] = {0};
+
+    sscanf(input, "%15s", first);
+    for (int i = 0; first[i]; ++i) first[i] = tolower(first[i]);
+
+    for (size_t i = 0; i < sizeof(wh) / sizeof(wh[0]); ++i)
+        if (strcmp(first, wh[i]) == 0)
+            return true;
+
+    return false;
+}
+
+float fossil_lang_detect_emotion(const char *input) {
+    const char *positive[] = {"great", "love", "happy", "good", "excellent", "amazing", "yes"};
+    const char *negative[] = {"hate", "bad", "sad", "angry", "terrible", "no", "awful"};
+
+    float score = 0.0f;
+    char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
+    size_t n = fossil_lang_tokenize(input, tokens, FOSSIL_JELLYFISH_MAX_TOKENS);
+
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = 0; j < sizeof(positive) / sizeof(positive[0]); ++j)
+            if (strcmp(tokens[i], positive[j]) == 0) score += 1.0f;
+        for (size_t j = 0; j < sizeof(negative) / sizeof(negative[0]); ++j)
+            if (strcmp(tokens[i], negative[j]) == 0) score -= 1.0f;
     }
+
+    if (score > 3.0f) score = 3.0f;
+    if (score < -3.0f) score = -3.0f;
+    return score / 3.0f; // Normalize to [-1.0, 1.0]
+}
+
+int fossil_lang_detect_bias_or_falsehood(const char *input) {
+    const char *bias_phrases[] = {
+        "everyone knows", "obviously", "literally", "always", "never", "the truth is",
+        "you have to believe", "no one can deny", "it's a fact", "fake news"
+    };
+
+    for (size_t i = 0; i < sizeof(bias_phrases) / sizeof(bias_phrases[0]); ++i) {
+        if (strstr(input, bias_phrases[i]) != NULL) return 1;
+    }
+
     return 0;
 }
 
-const char* fossil_lang_guess_pos(const char *word, size_t length) {
-    if (length > 3 && strcmp(word + length - 3, "ing") == 0) return "verb";
-    if (length > 2 && strcmp(word + length - 2, "ed") == 0) return "verb";
-    if (length > 1 && word[length - 1] == 'y') return "adj";
-    if (length > 2 && word[length - 1] == 's') return "noun";
-    return "unknown";
-}
+int fossil_lang_align_truth(const fossil_jellyfish_chain *chain, const char *input) {
+    if (!chain || !input) return 0;
 
-size_t fossil_lang_word_frequency(const char *text, const char *word) {
-    size_t count = 0;
-    size_t word_len = strlen(word);
-    const char *p = text;
-    while ((p = strstr(p, word)) != NULL) {
-        if ((p == text || !isalnum(p[-1])) && !isalnum(p[word_len])) {
-            count++;
-        }
-        p += word_len;
-    }
-    return count;
-}
+    for (size_t i = 0; i < chain->count; ++i) {
+        const fossil_jellyfish_block *b = &chain->memory[i];
+        if (!b->valid) continue;
 
-size_t fossil_lang_split_sentences(const char *text, fossil_lang_token *sentences, size_t max_sentences) {
-    size_t count = 0;
-    const char *start = text;
-    for (const char *p = text; *p && count < max_sentences; ++p) {
-        if (*p == '.' || *p == '?' || *p == '!') {
-            while (*(p+1) == ' ') ++p;
-            sentences[count++] = (fossil_lang_token){start, (size_t)(p - start + 1)};
-            start = p + 1;
+        if (strcmp(input, b->input) == 0) {
+            if (strcmp(b->output, "false") == 0 || strcmp(b->output, "incorrect") == 0)
+                return -1;
+            return 1;
         }
     }
-    if (*start && count < max_sentences) {
-        sentences[count++] = (fossil_lang_token){start, strlen(start)};
-    }
-    return count;
+
+    return 0;
 }
 
-size_t fossil_lang_stem(char *word, size_t length) {
-    if (length > 4 && strcmp(&word[length - 3], "ing") == 0) return length - 3;
-    if (length > 3 && strcmp(&word[length - 2], "ed") == 0) return length - 2;
-    if (length > 3 && strcmp(&word[length - 1], "s") == 0) return length - 1;
-    return length;
-}
+float fossil_lang_estimate_trust(const fossil_jellyfish_chain *chain, const char *input) {
+    if (!input || strlen(input) < 3) return 0.1f;
 
-int fossil_lang_is_question(const char *sentence) {
-    size_t len = strlen(sentence);
-    return (len > 0 && sentence[len - 1] == '?');
-}
+    int contradiction = fossil_lang_align_truth(chain, input);
+    if (contradiction < 0) return 0.0f;
 
-const char* fossil_lang_detect_emotion(const char *sentence) {
-    if (strstr(sentence, "thank") || strstr(sentence, "great") || strstr(sentence, "love"))
-        return "positive";
-    if (strstr(sentence, "hate") || strstr(sentence, "terrible") || strstr(sentence, "angry"))
-        return "negative";
-    return "neutral";
-}
+    float emotion = fossil_lang_detect_emotion(input);
+    float bias = fossil_lang_detect_bias_or_falsehood(input) ? -0.5f : 0.0f;
 
-int fossil_lang_match_phrase(const char *text, const char *phrase) {
-    char buf_text[512];
-    char buf_phrase[128];
+    float trust = 0.5f + (emotion * 0.25f) + (bias);
+    if (trust > 1.0f) trust = 1.0f;
+    if (trust < 0.0f) trust = 0.0f;
 
-    strncpy(buf_text, text, sizeof(buf_text));
-    strncpy(buf_phrase, phrase, sizeof(buf_phrase));
-    fossil_lang_normalize(buf_text);
-    fossil_lang_normalize(buf_phrase);
-
-    return strstr(buf_text, buf_phrase) != NULL;
+    return trust;
 }
