@@ -118,3 +118,136 @@ float fossil_lang_estimate_trust(const fossil_jellyfish_chain *chain, const char
 
     return trust;
 }
+
+void fossil_lang_normalize(const char *input, char *out, size_t out_size) {
+    struct {
+        const char *slang;
+        const char *formal;
+    } replacements[] = {
+        {"gonna", "going to"},
+        {"wanna", "want to"},
+        {"gotta", "have to"},
+        {"ain't", "is not"},
+        {"can't", "cannot"},
+        {"don't", "do not"},
+        {"won't", "will not"},
+        {"y'all", "you all"},
+        {"lemme", "let me"},
+        {"gimme", "give me"},
+        {"cuz", "because"},
+        {"u", "you"},
+        {"r", "are"},
+        {"ur", "your"},
+        {"im", "I am"},
+        {"idk", "I don't know"},
+        {"lol", "(laughing)"}
+    };
+
+    const char *p = input;
+    char token[64] = {0};
+    size_t out_len = 0;
+
+    while (*p && out_len < out_size - 1) {
+        size_t t = 0;
+        while (*p && !isspace(*p) && t < sizeof(token) - 1)
+            token[t++] = tolower(*p++);
+        token[t] = '\0';
+
+        const char *replacement = NULL;
+        for (size_t i = 0; i < sizeof(replacements) / sizeof(replacements[0]); ++i) {
+            if (strcmp(token, replacements[i].slang) == 0) {
+                replacement = replacements[i].formal;
+                break;
+            }
+        }
+
+        const char *word = replacement ? replacement : token;
+        size_t wlen = strlen(word);
+        if (out_len + wlen >= out_size - 1) break;
+
+        memcpy(out + out_len, word, wlen);
+        out_len += wlen;
+
+        if (*p && out_len < out_size - 1) {
+            out[out_len++] = ' ';
+            while (isspace(*p)) ++p;
+        }
+    }
+
+    if (out_len > 0 && out[out_len - 1] == ' ') --out_len;
+    out[out_len] = '\0';
+}
+
+void fossil_lang_summarize(const char *input, char *out, size_t out_size) {
+    char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
+    size_t token_count = fossil_lang_tokenize(input, tokens, FOSSIL_JELLYFISH_MAX_TOKENS);
+
+    size_t out_len = 0;
+    for (size_t i = 0; i < token_count && out_len < out_size - 1; ++i) {
+        const char *tok = tokens[i];
+        size_t len = strlen(tok);
+        if (out_len + len + 1 >= out_size) break;
+
+        if (i > 0) out[out_len++] = ' ';
+        memcpy(out + out_len, tok, len);
+        out_len += len;
+    }
+
+    out[out_len] = '\0';
+}
+
+void fossil_lang_extract_focus(const char *input, char *out, size_t out_size) {
+    const char *stopwords[] = {
+        "i", "you", "we", "they", "he", "she", "it",
+        "am", "is", "are", "was", "were", "be", "been",
+        "do", "does", "did", "will", "can", "should", "would", "could",
+        "to", "a", "an", "the", "and", "or", "in", "on", "for", "with",
+        "this", "that", "these", "those", "of", "at", "as", "from", "by"
+    };
+
+    char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
+    size_t count = fossil_lang_tokenize(input, tokens, FOSSIL_JELLYFISH_MAX_TOKENS);
+
+    for (size_t i = 0; i < count; ++i) {
+        int skip = 0;
+        for (size_t j = 0; j < sizeof(stopwords) / sizeof(stopwords[0]); ++j) {
+            if (strcmp(tokens[i], stopwords[j]) == 0) {
+                skip = 1;
+                break;
+            }
+        }
+
+        if (!skip) {
+            strncpy(out, tokens[i], out_size - 1);
+            out[out_size - 1] = '\0';
+            return;
+        }
+    }
+
+    // fallback
+    strncpy(out, count > 0 ? tokens[0] : "", out_size - 1);
+    out[out_size - 1] = '\0';
+}
+
+float fossil_lang_similarity(const char *a, const char *b) {
+    char tokens_a[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
+    char tokens_b[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
+
+    size_t count_a = fossil_lang_tokenize(a, tokens_a, FOSSIL_JELLYFISH_MAX_TOKENS);
+    size_t count_b = fossil_lang_tokenize(b, tokens_b, FOSSIL_JELLYFISH_MAX_TOKENS);
+
+    size_t match = 0;
+    for (size_t i = 0; i < count_a; ++i) {
+        for (size_t j = 0; j < count_b; ++j) {
+            if (strcmp(tokens_a[i], tokens_b[j]) == 0) {
+                ++match;
+                break;
+            }
+        }
+    }
+
+    size_t total = count_a + count_b;
+    if (total == 0) return 0.0f;
+
+    return (2.0f * match) / total; // Jaccard-based estimate
+}
