@@ -598,15 +598,17 @@ int fossil_jellyfish_imagine_block(fossil_jellyfish_chain* chain, size_t source_
 
     fossil_jellyfish_block* src = &chain->memory[source_index];
     fossil_jellyfish_block* blk = &chain->memory[chain->count];
-
     memset(blk, 0, sizeof(fossil_jellyfish_block));
+
     strncpy(blk->input, src->input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
     strncpy(blk->output, new_output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
-    blk->timestamp = /* insert current timestamp */;
+
+    // Use a proper timestamping function here, e.g., time(NULL)*1000 or platform-specific
+    blk->timestamp = (uint64_t)time(NULL) * 1000;  // Placeholder: replace with higher-res if needed
     blk->delta_ms = 0;
     blk->duration_ms = 0;
     blk->valid = 1;
-    blk->confidence = 0.5f;  // Initial confidence for imagined blocks
+    blk->confidence = 0.5f;  // Neutral confidence for imagined content
     blk->usage_count = 0;
     blk->immutable = 0;
 
@@ -614,7 +616,8 @@ int fossil_jellyfish_imagine_block(fossil_jellyfish_chain* chain, size_t source_
     blk->imagined_from_index = (uint32_t)source_index;
     strncpy(blk->imagination_reason, reason ? reason : "unspecified", sizeof(blk->imagination_reason) - 1);
 
-    fossil_jellyfish_block_sign(blk);
+    // Optional: Sign the block using current device's private key (may be NULL or mock)
+    fossil_jellyfish_block_sign(blk, NULL);  // NULL if no real key used yet
 
     chain->count++;
     chain->updated_at = blk->timestamp;
