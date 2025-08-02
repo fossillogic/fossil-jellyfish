@@ -16,6 +16,7 @@
 
 #include "jellyfish.h"
 #include "iochat.h"
+#include "imagine.h"
 #include "language.h"
 
 #endif /* FOSSIL_JELLYFISH_AI_FRAMEWORK_H */
