@@ -57,22 +57,29 @@ extern "C"
  * Each block stores a learned input-output pair, metadata about usage,
  * cryptographic fingerprinting, and timing. The `immutable` flag ensures
  * the block is protected from decay, pruning, or accidental overwrites.
+ *
+ * Indicates whether this block is imagined (not from real interaction),
+ * and optionally links to a "source" block or reasoning trail.
  */
 typedef struct {
     char input[FOSSIL_JELLYFISH_INPUT_SIZE];
     char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];
     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];
-    uint64_t timestamp;               // Absolute UNIX timestamp (ms granularity if needed)
-    uint32_t delta_ms;                // Time since last block in ms
-    uint32_t duration_ms;             // Time taken to process this block
-    int valid;                        // Whether the block is currently considered valid
-    float confidence;                 // Confidence score (0.0 to 1.0)
-    uint32_t usage_count;             // Times this block was retrieved or matched
+    uint64_t timestamp;
+    uint32_t delta_ms;
+    uint32_t duration_ms;
+    int valid;
+    float confidence;
+    uint32_t usage_count;
 
-    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];     // Source device fingerprint
-    uint8_t signature[FOSSIL_SIGNATURE_SIZE];     // Cryptographic signature for authenticity
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];
+    uint8_t signature[FOSSIL_SIGNATURE_SIZE];
+    int immutable;
 
-    int immutable;                    // New: If non-zero, block is protected from decay and removal
+    // Imagination-related fields:
+    int imagined;                             // New: 1 = imagined, 0 = real
+    uint32_t imagined_from_index;             // Optional: index of source block
+    char imagination_reason[128];             // Optional: short explanation ("extrapolated from similar pattern", etc.)
 } fossil_jellyfish_block;
 
 /**
@@ -194,6 +201,17 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
  * @return 0 on success, non-zero on failure.
  */
 int fossil_jellyfish_load(fossil_jellyfish_chain *chain, const char *filepath);
+
+/**
+ * @brief Generates a speculative (imagined) block based on an existing one.
+ *
+ * @param chain The Jellyfish memory chain to insert into.
+ * @param source_index Index of the source block in the chain.
+ * @param new_output The imagined output string.
+ * @param reason Short explanation of the imagination logic.
+ * @return int Index of the new imagined block, or -1 on failure.
+ */
+int fossil_jellyfish_imagine_block(fossil_jellyfish_chain* chain, size_t source_index, const char* new_output, const char* reason);
 
 /**
  * Decay the confidence of the jellyfish chain.
