@@ -589,6 +589,39 @@ int fossil_jellyfish_save(const fossil_jellyfish_chain *chain, const char *filep
     return 1;
 }
 
+int fossil_jellyfish_imagine_block(fossil_jellyfish_chain* chain, size_t source_index, const char* new_output, const char* reason) {
+    if (!chain || source_index >= chain->count || !new_output)
+        return -1;
+
+    if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM)
+        return -1;
+
+    fossil_jellyfish_block* src = &chain->memory[source_index];
+    fossil_jellyfish_block* blk = &chain->memory[chain->count];
+
+    memset(blk, 0, sizeof(fossil_jellyfish_block));
+    strncpy(blk->input, src->input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+    strncpy(blk->output, new_output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+    blk->timestamp = /* insert current timestamp */;
+    blk->delta_ms = 0;
+    blk->duration_ms = 0;
+    blk->valid = 1;
+    blk->confidence = 0.5f;  // Initial confidence for imagined blocks
+    blk->usage_count = 0;
+    blk->immutable = 0;
+
+    blk->imagined = 1;
+    blk->imagined_from_index = (uint32_t)source_index;
+    strncpy(blk->imagination_reason, reason ? reason : "unspecified", sizeof(blk->imagination_reason) - 1);
+
+    fossil_jellyfish_block_sign(blk);
+
+    chain->count++;
+    chain->updated_at = blk->timestamp;
+
+    return (int)(chain->count - 1);
+}
+
 static int fossil_jellyfish_similarity(const char *a, const char *b) {
     if (!a || !b) return -1; // invalid input
 
