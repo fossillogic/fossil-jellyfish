@@ -96,56 +96,70 @@ typedef struct {
 } fossil_jellyfish_chain;
 
 /**
- * Represents a parsed JellyDSL structure for describing AI mindsets or knowledge.
- * This structure is used to represent one complete mindset, including metadata,
- * activation logic, provenance, memory chain, trust settings, and more.
+ * @brief Fully unified JellyDSL structure supporting all AI archetypes.
  *
- * Designed to support the Truthful Intelligence (TI) framework.
- *
- * This structure represents a full AI model or mindset, including metadata, memory,
- * trust scores, archetype classification, behavioral modes, and extensibility for
- * specialized domains like NLP, anomaly detection, imagination, and more.
+ * This model supports NLP, anomaly detection, chat, TI, imagination,
+ * and more — with trust, traceability, resource awareness, and domain-specific flexibility.
  */
 typedef struct {
+    // Basic identity and classification
     char name[64];                                      // Name of the mindset or model
-    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Category labels (e.g., "anomaly", "NLP", "TI")
-    size_t tag_count;                                   // Number of tags used
-    char description[256];                              // Description of this model's purpose or traits
+    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Category labels
+    size_t tag_count;                                   // Number of tags
+    char description[256];                              // Human-readable purpose or notes
 
-    // Primary learned memory chain
-    fossil_jellyfish_chain chain;
-
-    // Files that this model relies on (can include external models, embeddings, etc.)
-    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];
+    // Core memory and models
+    fossil_jellyfish_chain chain;                       // Learned memory chain
+    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // Related models (filenames or handles)
     int model_count;
 
-    // Logical priority and confidence controls
-    int priority;
-    float confidence_threshold;
+    // Logic and activation
+    int priority;                                       // Higher = more preferred in resolution
+    float confidence_threshold;                         // Minimum to trust
+    char activation_condition[128];                     // Logic to determine activation
+    char state_machine[128];                            // Optional state machine or behavior file
 
-    // Activation conditions and dynamic behavior
-    char activation_condition[128];                     // Optional rule-based activation logic
-    char state_machine[128];                            // Optional FSM name or rule file
-
-    // Trust, integrity, and provenance
-    float trust_score;                                  // From 0.0 to 1.0
-    char source_uri[256];                               // URI or file reference for model source
-    char origin_device_id[64];                          // Device that originated this model
-    char version[32];                                   // Semantic or internal versioning
-    char content_hash[64];                              // Integrity hash for model content
+    // Trust and provenance
+    float trust_score;                                  // 0.0 to 1.0
+    char source_uri[256];                               // Where the model came from (URL, file, etc.)
+    char origin_device_id[64];                          // Device that created it
+    char version[32];                                   // Version string
+    char content_hash[64];                              // Hash of original model content
     uint64_t created_at;                                // Creation timestamp
-    uint64_t updated_at;                                // Last modified time
-    int immutable;                                      // Non-zero if the model is locked against edits
+    uint64_t updated_at;                                // Last modified timestamp
+    int immutable;                                      // If non-zero, model is locked
 
-    // Domain-specific extensions (optional usage depending on archetype)
-    char archetype[32];                                 // NEW: e.g., "anomaly", "nlp", "chat", "ti", "imagine"
-    char behavior_profile[64];                          // NEW: e.g., "deterministic", "probabilistic", "reflective"
-    char imagination_mode[32];                          // NEW: e.g., "disabled", "enabled", "guided"
-    char audit_mode[32];                                // NEW: "full", "light", "none" — for TI tracking
-    int experimental;                                   // NEW: if 1, this model is not finalized
+    // Archetype and behavior classification
+    char archetype[32];                                 // e.g., "nlp", "anomaly", "chat", "ti", "imagine"
+    char behavior_profile[64];                          // e.g., "adaptive", "reflective", "static", "probabilistic"
+    char imagination_mode[32];                          // "enabled", "disabled", "guided"
+    char audit_mode[32];                                // "none", "light", "full"
+    int experimental;                                   // If 1, model is not production-ready
 
-    // Reserved future fields or user-defined JSON blob
-    char metadata_blob[512];                            // NEW: optional JSON-style key-value metadata (parsable by custom logic)
+    // I/O and format compatibility
+    char input_format[32];                              // e.g., "text", "json", "sensor"
+    char output_format[32];                             // e.g., "text", "label", "score"
+    char io_protocol[32];                               // e.g., "stream", "event", "batch"
+
+    // Origin and training strategy
+    char strategy[32];                                  // e.g., "ml-trained", "rule-based", "hybrid"
+    char training_data_ref[128];                        // Optional URI or label for data origin
+
+    // Task and purpose classification
+    char task[64];                                      // e.g., "classification", "generation", "detection"
+    char purpose[64];                                   // e.g., "search", "conversation", "simulation"
+
+    // Deployment constraints
+    uint32_t memory_limit_kb;                           // Max memory allowed (0 = unspecified)
+    uint32_t max_latency_ms;                            // Max allowed latency (0 = unlimited)
+    int requires_gpu;                                   // 0 = no, 1 = optional, 2 = required
+
+    // Ethical/sensitivity flags
+    char sensitivity[32];                               // e.g., "low", "moderate", "high", "critical"
+    int ethical_review_required;                        // 1 = yes, 0 = no
+
+    // Open metadata for domain-specific or unknown fields
+    char metadata_blob[512];                            // Optional JSON-style extension
 } fossil_jellyfish_jellydsl;
 
 // *****************************************************************************
