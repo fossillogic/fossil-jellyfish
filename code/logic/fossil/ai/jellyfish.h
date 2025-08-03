@@ -101,27 +101,51 @@ typedef struct {
  * activation logic, provenance, memory chain, trust settings, and more.
  *
  * Designed to support the Truthful Intelligence (TI) framework.
+ *
+ * This structure represents a full AI model or mindset, including metadata, memory,
+ * trust scores, archetype classification, behavioral modes, and extensibility for
+ * specialized domains like NLP, anomaly detection, imagination, and more.
  */
 typedef struct {
-    char name[64];                                      // Name of the model
-    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Tags for categorization
-    size_t tag_count;                                   // Number of tags
-    char description[256];                              // Description or notes
-    fossil_jellyfish_chain chain;                       // Associated memory chain
-    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // List of model filenames
-    int priority;                                       // Processing priority
-    float confidence_threshold;                         // Confidence threshold
-    int model_count;                                    // Number of models
-    char activation_condition[128];                     // Optional logic to activate
-    char source_uri[256];                               // Source reference for provenance
-    char origin_device_id[64];                          // Device ID that originated the model
-    char version[32];                                   // Version string
-    char content_hash[64];                              // Integrity hash
-    uint64_t created_at;                                // Timestamp of creation
-    uint64_t updated_at;                                // Last update timestamp
-    float trust_score;                                  // Trust score (0.0 - 1.0)
-    int immutable;                                      // Nonzero = model cannot change
-    char state_machine[128];                            // Optional state machine ref
+    char name[64];                                      // Name of the mindset or model
+    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Category labels (e.g., "anomaly", "NLP", "TI")
+    size_t tag_count;                                   // Number of tags used
+    char description[256];                              // Description of this model's purpose or traits
+
+    // Primary learned memory chain
+    fossil_jellyfish_chain chain;
+
+    // Files that this model relies on (can include external models, embeddings, etc.)
+    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];
+    int model_count;
+
+    // Logical priority and confidence controls
+    int priority;
+    float confidence_threshold;
+
+    // Activation conditions and dynamic behavior
+    char activation_condition[128];                     // Optional rule-based activation logic
+    char state_machine[128];                            // Optional FSM name or rule file
+
+    // Trust, integrity, and provenance
+    float trust_score;                                  // From 0.0 to 1.0
+    char source_uri[256];                               // URI or file reference for model source
+    char origin_device_id[64];                          // Device that originated this model
+    char version[32];                                   // Semantic or internal versioning
+    char content_hash[64];                              // Integrity hash for model content
+    uint64_t created_at;                                // Creation timestamp
+    uint64_t updated_at;                                // Last modified time
+    int immutable;                                      // Non-zero if the model is locked against edits
+
+    // Domain-specific extensions (optional usage depending on archetype)
+    char archetype[32];                                 // NEW: e.g., "anomaly", "nlp", "chat", "ti", "imagine"
+    char behavior_profile[64];                          // NEW: e.g., "deterministic", "probabilistic", "reflective"
+    char imagination_mode[32];                          // NEW: e.g., "disabled", "enabled", "guided"
+    char audit_mode[32];                                // NEW: "full", "light", "none" — for TI tracking
+    int experimental;                                   // NEW: if 1, this model is not finalized
+
+    // Reserved future fields or user-defined JSON blob
+    char metadata_blob[512];                            // NEW: optional JSON-style key-value metadata (parsable by custom logic)
 } fossil_jellyfish_jellydsl;
 
 // *****************************************************************************
