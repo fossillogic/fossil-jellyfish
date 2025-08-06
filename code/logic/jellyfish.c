@@ -1195,23 +1195,6 @@ int fossil_jellyfish_clone_chain(const fossil_jellyfish_chain *src, fossil_jelly
     return 0;
 }
 
-int fossil_jellyfish_filter_by_tag(const fossil_jellyfish_jellydsl *model, const char *tag, fossil_jellyfish_chain *out) {
-    if (!model || !tag || !out) return -1;
-
-    bool tag_match = false;
-    for (size_t i = 0; i < model->tag_count; ++i) {
-        if (strcmp(model->tags[i], tag) == 0) {
-            tag_match = true;
-            break;
-        }
-    }
-
-    if (!tag_match) return 0; // No match, return empty chain
-
-    memcpy(out, &model->chain, sizeof(fossil_jellyfish_chain));
-    return (int)out->count;
-}
-
 bool fossil_jellyfish_reason_verbose(const fossil_jellyfish_chain *chain, const char *input, char *out_output, float *out_confidence, const fossil_jellyfish_block **out_block) {
     if (!chain || !input) return false;
 
