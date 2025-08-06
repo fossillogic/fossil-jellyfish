@@ -43,7 +43,7 @@ using fossil::ai::JellyfishAI;
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_init) {
     JellyfishAI ai;
-    const fossil_jellyfish_chain& chain = ai.get_chain();
+    const fossil_jellyfish_chain_t& chain = ai.get_chain();
     ASSUME_ITS_EQUAL_SIZE(chain.count, 0);
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
         ASSUME_ITS_TRUE(chain.memory[i].valid == 0);
@@ -53,7 +53,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_init) {
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_learn_and_reason) {
     JellyfishAI ai;
     ai.learn("hello", "world");
-    const fossil_jellyfish_chain& chain = ai.get_chain();
+    const fossil_jellyfish_chain_t& chain = ai.get_chain();
     ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
     ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "hello");
     ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "world");
@@ -70,7 +70,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_learn_and_reason) {
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_cleanup) {
     JellyfishAI ai;
     ai.learn("a", "b");
-    fossil_jellyfish_chain& chain = ai.get_chain();
+    fossil_jellyfish_chain_t& chain = ai.get_chain();
     chain.memory[0].confidence = 0.01f; // force low confidence
     chain.memory[0].valid = 1;
     chain.count = 1;
@@ -98,7 +98,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_and_load) {
     ai.learn("input2", "output2");
 
     // Set known confidence values to ensure they're saved/loaded properly
-    fossil_jellyfish_chain& chain = ai.get_chain();
+    fossil_jellyfish_chain_t& chain = ai.get_chain();
     chain.memory[0].confidence = 0.85f;
     chain.memory[1].confidence = 0.65f;
 
@@ -110,7 +110,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_and_load) {
     bool load_result = loaded.load(filename);
     ASSUME_ITS_TRUE(load_result);
 
-    const fossil_jellyfish_chain& loaded_chain = loaded.get_chain();
+    const fossil_jellyfish_chain_t& loaded_chain = loaded.get_chain();
     ASSUME_ITS_EQUAL_SIZE(loaded_chain.count, 2);
 
     ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].input, "input1");
@@ -160,7 +160,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_chain) {
 FOSSIL_TEST_CASE(cpp_test_jellyfish_decay_confidence) {
     JellyfishAI ai;
     ai.learn("a", "b");
-    fossil_jellyfish_chain& chain = ai.get_chain();
+    fossil_jellyfish_chain_t& chain = ai.get_chain();
 
     // Set up one valid block
     chain.memory[0].confidence = 1.0f;
@@ -197,14 +197,14 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_best_memory) {
     JellyfishAI ai;
     ai.learn("a", "b");
     ai.learn("c", "d");
-    fossil_jellyfish_chain& chain = ai.get_chain();
+    fossil_jellyfish_chain_t& chain = ai.get_chain();
     chain.memory[0].confidence = 0.5f;
     chain.memory[1].confidence = 0.9f;
     chain.memory[0].valid = 1;
     chain.memory[1].valid = 1;
     chain.count = 2;
 
-    const fossil_jellyfish_block *best = ai.best_memory();
+    const fossil_jellyfish_block_t *best = ai.best_memory();
     ASSUME_ITS_TRUE(best != NULL);
     ASSUME_ITS_EQUAL_CSTR(best->input, "c");
 }
@@ -219,7 +219,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_detect_conflict) {
 FOSSIL_TEST_CASE(cpp_test_jellyfish_knowledge_coverage) {
     JellyfishAI ai;
     ai.learn("a", "b");
-    fossil_jellyfish_chain& chain = ai.get_chain();
+    fossil_jellyfish_chain_t& chain = ai.get_chain();
     chain.memory[0].valid = 1;
     chain.count = 1;
     float coverage = ai.knowledge_coverage();
@@ -228,7 +228,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_knowledge_coverage) {
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_struct_fields) {
     JellyfishAI ai;
-    fossil_jellyfish_chain& chain = ai.get_chain();
+    fossil_jellyfish_chain_t& chain = ai.get_chain();
     strcpy(chain.memory[0].input, "foo");
     strcpy(chain.memory[0].output, "bar");
     chain.count = 1;
