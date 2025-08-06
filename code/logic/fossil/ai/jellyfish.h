@@ -440,19 +440,6 @@ const fossil_jellyfish_block *fossil_jellyfish_find_by_hash(const fossil_jellyfi
 int fossil_jellyfish_clone_chain(const fossil_jellyfish_chain *src, fossil_jellyfish_chain *dst);
 
 /**
- * @brief Filters a chain to contain only blocks associated with a specific tag.
- *
- * This would only apply if you associate tags at the block level in the future,
- * or for partial view of chains within a mindset model.
- *
- * @param model The JellyDSL model to filter from.
- * @param tag   The tag to match.
- * @param out   Output chain to write to.
- * @return Number of blocks copied.
- */
-int fossil_jellyfish_filter_by_tag(const fossil_jellyfish_jellydsl *model, const char *tag, fossil_jellyfish_chain *out);
-
-/**
  * @brief Like `reason`, but includes match confidence, source block, and hash.
  *
  * Useful for debug, inspection, or high-trust outputs.
