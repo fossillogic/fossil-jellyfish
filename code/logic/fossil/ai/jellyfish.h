@@ -51,6 +51,14 @@ extern "C"
 // Type definitions
 // *****************************************************************************
 
+typedef enum {
+    JELLY_BLOCK_BASIC = 0,
+    JELLY_BLOCK_IMAGINED = 1,
+    JELLY_BLOCK_DERIVED = 2,
+    JELLY_BLOCK_EXPERIMENTAL = 3,
+    JELLY_BLOCK_VERIFIED = 4
+} fossil_jellyfish_block_type;
+
 /**
  * @brief Represents a single memory block in the Jellyfish AI chain.
  *
@@ -75,6 +83,7 @@ typedef struct {
     uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];
     uint8_t signature[FOSSIL_SIGNATURE_SIZE];
     int immutable;
+    int block_type;
 
     // Imagination-related fields:
     int imagined;                             // New: 1 = imagined, 0 = real
