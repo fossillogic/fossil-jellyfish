@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "jellyfish.h"  // Defines fossil_jellyfish_chain, block, jellydsl, etc.
+#include "jellyfish.h"  // Defines fossil_jellyfish_chain_t, block, jellydsl, etc.
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,7 +47,7 @@ typedef struct {
     size_t tag_count;                                   // Number of tags
     char description[256];                              // Description or notes
 
-    fossil_jellyfish_chain chain;                       // Associated memory chain
+    fossil_jellyfish_chain_t chain;                       // Associated memory chain
     char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // List of model filenames
     int model_count;                                    // Number of models
     int priority;                                       // Processing priority
@@ -101,25 +101,99 @@ typedef struct {
 // Function Prototypes (modular loaders/savers follow)
 // *****************************************************************************
 
-// Model descriptor (.jellyfish)
+/**
+ * @brief Load a JellyDSL model descriptor from a file (.jellyfish).
+ * @param filepath Path to the model file.
+ * @param out Pointer to output structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *out);
+
+/**
+ * @brief Save a JellyDSL model descriptor to a file (.jellyfish).
+ * @param filepath Path to the model file.
+ * @param model Pointer to the model structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_save_model(const char *filepath, const fossil_jellyfish_jellydsl *model);
 
-// Memory chain (.jfchain)
-int fossil_jellydsl_load_chain(const char *filepath, fossil_jellyfish_chain *out);
-int fossil_jellydsl_save_chain(const char *filepath, const fossil_jellyfish_chain *chain);
+/**
+ * @brief Load a memory chain from a file (.jfchain).
+ * @param filepath Path to the chain file.
+ * @param out Pointer to output chain structure.
+ * @return 0 on success, nonzero on failure.
+ */
+int fossil_jellydsl_load_chain(const char *filepath, fossil_jellyfish_chain_t *out);
 
+/**
+ * @brief Save a memory chain to a file (.jfchain).
+ * @param filepath Path to the chain file.
+ * @param chain Pointer to the chain structure.
+ * @return 0 on success, nonzero on failure.
+ */
+int fossil_jellydsl_save_chain(const char *filepath, const fossil_jellyfish_chain_t *chain);
+
+/**
+ * @brief Load an imagination idea from a file (.jfidea).
+ * @param filepath Path to the idea file.
+ * @param out Pointer to output idea structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_load_idea(const char *filepath, fossil_jellydsl_idea *out);
+
+/**
+ * @brief Save an imagination idea to a file (.jfidea).
+ * @param filepath Path to the idea file.
+ * @param idea Pointer to the idea structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_save_idea(const char *filepath, const fossil_jellydsl_idea *idea);
 
+/**
+ * @brief Load metadata from a file (.jfmeta).
+ * @param filepath Path to the metadata file.
+ * @param out Pointer to output metadata structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_load_metadata(const char *filepath, fossil_jellydsl_metadata *out);
+
+/**
+ * @brief Save metadata to a file (.jfmeta).
+ * @param filepath Path to the metadata file.
+ * @param meta Pointer to the metadata structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_save_metadata(const char *filepath, const fossil_jellydsl_metadata *meta);
 
+/**
+ * @brief Load a signature from a file (.jfsig).
+ * @param filepath Path to the signature file.
+ * @param out Pointer to output signature structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_load_signature(const char *filepath, fossil_jellydsl_signature *out);
+
+/**
+ * @brief Save a signature to a file (.jfsig).
+ * @param filepath Path to the signature file.
+ * @param sig Pointer to the signature structure.
+ * @return 0 on success, nonzero on failure.
+ */
 int fossil_jellydsl_save_signature(const char *filepath, const fossil_jellydsl_signature *sig);
 
-// Utility helpers
+/**
+ * @brief Check if a path ends with a given extension.
+ * @param path File path.
+ * @param ext Extension to check (including dot).
+ * @return true if path ends with ext, false otherwise.
+ */
 bool fossil_jellydsl_path_endswith(const char *path, const char *ext);
+
+/**
+ * @brief Guess the file type based on the file path.
+ * @param filepath File path.
+ * @return String representing the guessed type.
+ */
 const char *fossil_jellydsl_guess_type(const char *filepath);
 
 #ifdef __cplusplus
