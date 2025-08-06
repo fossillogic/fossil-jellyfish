@@ -95,73 +95,6 @@ typedef struct {
     uint64_t updated_at;                       // ← Timestamp when it was last updated
 } fossil_jellyfish_chain;
 
-/**
- * @brief Fully unified JellyDSL structure supporting all AI archetypes.
- *
- * This model supports NLP, anomaly detection, chat, TI, imagination,
- * and more — with trust, traceability, resource awareness, and domain-specific flexibility.
- */
-typedef struct {
-    // Basic identity and classification
-    char name[64];                                      // Name of the mindset or model
-    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];           // Category labels
-    size_t tag_count;                                   // Number of tags
-    char description[256];                              // Human-readable purpose or notes
-
-    // Core memory and models
-    fossil_jellyfish_chain chain;                       // Learned memory chain
-    char models[FOSSIL_JELLYFISH_MAX_MODELS][32];       // Related models (filenames or handles)
-    int model_count;
-
-    // Logic and activation
-    int priority;                                       // Higher = more preferred in resolution
-    float confidence_threshold;                         // Minimum to trust
-    char activation_condition[128];                     // Logic to determine activation
-    char state_machine[128];                            // Optional state machine or behavior file
-
-    // Trust and provenance
-    float trust_score;                                  // 0.0 to 1.0
-    char source_uri[256];                               // Where the model came from (URL, file, etc.)
-    char origin_device_id[64];                          // Device that created it
-    char version[32];                                   // Version string
-    char content_hash[64];                              // Hash of original model content
-    uint64_t created_at;                                // Creation timestamp
-    uint64_t updated_at;                                // Last modified timestamp
-    int immutable;                                      // If non-zero, model is locked
-
-    // Archetype and behavior classification
-    char archetype[32];                                 // e.g., "nlp", "anomaly", "chat", "ti", "imagine"
-    char behavior_profile[64];                          // e.g., "adaptive", "reflective", "static", "probabilistic"
-    char imagination_mode[32];                          // "enabled", "disabled", "guided"
-    char audit_mode[32];                                // "none", "light", "full"
-    int experimental;                                   // If 1, model is not production-ready
-
-    // I/O and format compatibility
-    char input_format[32];                              // e.g., "text", "json", "sensor"
-    char output_format[32];                             // e.g., "text", "label", "score"
-    char io_protocol[32];                               // e.g., "stream", "event", "batch"
-
-    // Origin and training strategy
-    char strategy[32];                                  // e.g., "ml-trained", "rule-based", "hybrid"
-    char training_data_ref[128];                        // Optional URI or label for data origin
-
-    // Task and purpose classification
-    char task[64];                                      // e.g., "classification", "generation", "detection"
-    char purpose[64];                                   // e.g., "search", "conversation", "simulation"
-
-    // Deployment constraints
-    uint32_t memory_limit_kb;                           // Max memory allowed (0 = unspecified)
-    uint32_t max_latency_ms;                            // Max allowed latency (0 = unlimited)
-    int requires_gpu;                                   // 0 = no, 1 = optional, 2 = required
-
-    // Ethical/sensitivity flags
-    char sensitivity[32];                               // e.g., "low", "moderate", "high", "critical"
-    int ethical_review_required;                        // 1 = yes, 0 = no
-
-    // Open metadata for domain-specific or unknown fields
-    char metadata_blob[512];                            // Optional JSON-style extension
-} fossil_jellyfish_jellydsl;
-
 // *****************************************************************************
 // Function prototypes
 // *****************************************************************************
@@ -364,16 +297,6 @@ float fossil_jellyfish_chain_trust_score(const fossil_jellyfish_chain *chain);
  * @param block Pointer to the memory block to mark as immutable.
  */
 void fossil_jellyfish_mark_immutable(fossil_jellyfish_block *block);
-
-/**
- * Parses a .jellyfish file and extracts mindsets.
- * 
- * @param filepath       Path to the .jellyfish file.
- * @param out_mindsets   Array to store parsed mindsets.
- * @param max_mindsets   Maximum number of mindsets to store.
- * @return               Number of mindsets parsed, or 0 on failure.
- */
-int fossil_jellyfish_parse_jellyfish_file(const char *filepath, fossil_jellyfish_jellydsl *out, int max_chains);
 
 /**
  * @brief Prunes invalid or low-confidence blocks from the chain.
