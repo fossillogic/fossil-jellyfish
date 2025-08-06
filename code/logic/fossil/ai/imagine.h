@@ -34,7 +34,7 @@ extern "C"
  * @param reason Short explanation (for traceability).
  * @return Index of the new imagined block, or -1 on failure.
  */
-int fossil_imagine_from_block(fossil_jellyfish_chain* chain, size_t source_index, const char* imagined_output, const char* reason);
+int fossil_imagine_from_block(fossil_jellyfish_chain_t* chain, size_t source_index, const char* imagined_output, const char* reason);
 
 /**
  * @brief Create an imagined block from a raw input without a known source.
@@ -45,24 +45,24 @@ int fossil_imagine_from_block(fossil_jellyfish_chain* chain, size_t source_index
  * @param reason Short explanation (for traceability).
  * @return Index of the new imagined block, or -1 on failure.
  */
-int fossil_imagine_fresh(fossil_jellyfish_chain* chain, const char* imagined_input, const char* imagined_output, const char* reason);
+int fossil_imagine_fresh(fossil_jellyfish_chain_t* chain, const char* imagined_input, const char* imagined_output, const char* reason);
 
 /**
  * @brief Check if a block is imagined.
  */
-int fossil_imagine_is_imagined(const fossil_jellyfish_block* blk);
+int fossil_imagine_is_imagined(const fossil_jellyfish_block_t* blk);
 
 /**
  * @brief Count how many imagined blocks exist in the chain.
  */
-size_t fossil_imagine_count(const fossil_jellyfish_chain* chain);
+size_t fossil_imagine_count(const fossil_jellyfish_chain_t* chain);
 
 /**
  * @brief Remove all imagined blocks (for pruning or cleanup).
  *
  * @return Number of blocks removed.
  */
-size_t fossil_imagine_prune(fossil_jellyfish_chain* chain);
+size_t fossil_imagine_prune(fossil_jellyfish_chain_t* chain);
 
 #ifdef __cplusplus
 }

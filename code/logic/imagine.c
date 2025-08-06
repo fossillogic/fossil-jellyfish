@@ -19,16 +19,16 @@ static uint64_t now_ms() {
     return (uint64_t)(time(NULL)) * 1000;  // Replace with high-res timer if needed
 }
 
-int fossil_imagine_from_block(fossil_jellyfish_chain* chain, size_t source_index, const char* imagined_output, const char* reason) {
+int fossil_imagine_from_block(fossil_jellyfish_chain_t* chain, size_t source_index, const char* imagined_output, const char* reason) {
     if (!chain || source_index >= chain->count || !imagined_output)
         return -1;
 
     if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM)
         return -1;
 
-    fossil_jellyfish_block* src = &chain->memory[source_index];
-    fossil_jellyfish_block* blk = &chain->memory[chain->count];
-    memset(blk, 0, sizeof(fossil_jellyfish_block));
+    fossil_jellyfish_block_t* src = &chain->memory[source_index];
+    fossil_jellyfish_block_t* blk = &chain->memory[chain->count];
+    memset(blk, 0, sizeof(fossil_jellyfish_block_t));
 
     strncpy(blk->input, src->input, sizeof(blk->input) - 1);
     strncpy(blk->output, imagined_output, sizeof(blk->output) - 1);
@@ -44,15 +44,15 @@ int fossil_imagine_from_block(fossil_jellyfish_chain* chain, size_t source_index
     return (int)(chain->count - 1);
 }
 
-int fossil_imagine_fresh(fossil_jellyfish_chain* chain, const char* imagined_input, const char* imagined_output, const char* reason) {
+int fossil_imagine_fresh(fossil_jellyfish_chain_t* chain, const char* imagined_input, const char* imagined_output, const char* reason) {
     if (!chain || !imagined_input || !imagined_output)
         return -1;
 
     if (chain->count >= FOSSIL_JELLYFISH_MAX_MEM)
         return -1;
 
-    fossil_jellyfish_block* blk = &chain->memory[chain->count];
-    memset(blk, 0, sizeof(fossil_jellyfish_block));
+    fossil_jellyfish_block_t* blk = &chain->memory[chain->count];
+    memset(blk, 0, sizeof(fossil_jellyfish_block_t));
 
     strncpy(blk->input, imagined_input, sizeof(blk->input) - 1);
     strncpy(blk->output, imagined_output, sizeof(blk->output) - 1);
@@ -68,12 +68,12 @@ int fossil_imagine_fresh(fossil_jellyfish_chain* chain, const char* imagined_inp
     return (int)(chain->count - 1);
 }
 
-int fossil_imagine_is_imagined(const fossil_jellyfish_block* blk) {
+int fossil_imagine_is_imagined(const fossil_jellyfish_block_t* blk) {
     if (!blk) return 0;
     return blk->imagined != 0;
 }
 
-size_t fossil_imagine_count(const fossil_jellyfish_chain* chain) {
+size_t fossil_imagine_count(const fossil_jellyfish_chain_t* chain) {
     if (!chain) return 0;
     size_t count = 0;
     for (size_t i = 0; i < chain->count; ++i) {
@@ -83,7 +83,7 @@ size_t fossil_imagine_count(const fossil_jellyfish_chain* chain) {
     return count;
 }
 
-size_t fossil_imagine_prune(fossil_jellyfish_chain* chain) {
+size_t fossil_imagine_prune(fossil_jellyfish_chain_t* chain) {
     if (!chain) return 0;
     size_t new_count = 0;
     for (size_t i = 0; i < chain->count; ++i) {

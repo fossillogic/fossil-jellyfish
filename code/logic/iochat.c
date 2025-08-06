@@ -49,7 +49,7 @@ static void log_session_line(const char *line) {
 }
 
 // Add a system block to the chain
-static void record_system_block(fossil_jellyfish_chain *chain, const char *msg) {
+static void record_system_block(fossil_jellyfish_chain_t *chain, const char *msg) {
     if (!chain || !msg) return;
 
     // Compose system input as [system] plus message
@@ -66,7 +66,7 @@ static void record_system_block(fossil_jellyfish_chain *chain, const char *msg) 
 
 // --- API Functions ---
 
-int fossil_io_chat_start(const char *context_name, fossil_jellyfish_chain *chain) {
+int fossil_io_chat_start(const char *context_name, fossil_jellyfish_chain_t *chain) {
     if (context_name && strlen(context_name) < sizeof(current_context_name)) {
         strncpy(current_context_name, context_name, sizeof(current_context_name) - 1);
     } else {
@@ -96,11 +96,11 @@ int fossil_io_chat_start(const char *context_name, fossil_jellyfish_chain *chain
     return 0;
 }
 
-int fossil_io_chat_respond(fossil_jellyfish_chain *chain, const char *input, char *output, size_t size) {
+int fossil_io_chat_respond(fossil_jellyfish_chain_t *chain, const char *input, char *output, size_t size) {
     if (!chain || !input || !output || size == 0) return -1;
 
     float confidence = 0.0f;
-    const fossil_jellyfish_block *matched_block = NULL;
+    const fossil_jellyfish_block_t *matched_block = NULL;
 
     bool found = fossil_jellyfish_reason_verbose(chain, input, output, &confidence, &matched_block);
 
@@ -125,7 +125,7 @@ int fossil_io_chat_respond(fossil_jellyfish_chain *chain, const char *input, cha
     }
 }
 
-int fossil_io_chat_end(fossil_jellyfish_chain *chain) {
+int fossil_io_chat_end(fossil_jellyfish_chain_t *chain) {
     time_t now = time(NULL);
     double duration = difftime(now, session_start_time);
 
@@ -151,7 +151,7 @@ int fossil_io_chat_end(fossil_jellyfish_chain *chain) {
     return 0;
 }
 
-int fossil_io_chat_inject_system_message(fossil_jellyfish_chain *chain, const char *message) {
+int fossil_io_chat_inject_system_message(fossil_jellyfish_chain_t *chain, const char *message) {
     if (!chain || !message || strlen(message) == 0) {
         return -1;
     }
@@ -172,7 +172,7 @@ int fossil_io_chat_inject_system_message(fossil_jellyfish_chain *chain, const ch
     return 0;
 }
 
-int fossil_io_chat_learn_response(fossil_jellyfish_chain *chain, const char *input, const char *output) {
+int fossil_io_chat_learn_response(fossil_jellyfish_chain_t *chain, const char *input, const char *output) {
     if (!chain || !input || !output || strlen(input) == 0 || strlen(output) == 0) {
         return -1;
     }
@@ -189,7 +189,7 @@ int fossil_io_chat_learn_response(fossil_jellyfish_chain *chain, const char *inp
     return 0;
 }
 
-int fossil_io_chat_turn_count(const fossil_jellyfish_chain *chain) {
+int fossil_io_chat_turn_count(const fossil_jellyfish_chain_t *chain) {
     if (!chain) return 0;
 
     int count = 0;
@@ -202,12 +202,12 @@ int fossil_io_chat_turn_count(const fossil_jellyfish_chain *chain) {
     return count;
 }
 
-int fossil_io_chat_summarize_session(const fossil_jellyfish_chain *chain, char *summary, size_t size) {
+int fossil_io_chat_summarize_session(const fossil_jellyfish_chain_t *chain, char *summary, size_t size) {
     if (!chain || !summary || size == 0) return -1;
 
     size_t pos = 0;
     for (size_t i = 0; i < chain->count && pos + 64 < size; ++i) {
-        const fossil_jellyfish_block *b = &chain->memory[i];
+        const fossil_jellyfish_block_t *b = &chain->memory[i];
         if (!b->valid) continue;
         if (strncmp(b->input, "[system]", FOSSIL_JELLYFISH_INPUT_SIZE) == 0) continue;
 
@@ -219,14 +219,14 @@ int fossil_io_chat_summarize_session(const fossil_jellyfish_chain *chain, char *
     return pos > 0 ? 0 : -1;
 }
 
-int fossil_io_chat_filter_recent(const fossil_jellyfish_chain *chain, fossil_jellyfish_chain *out_chain, int turn_count) {
+int fossil_io_chat_filter_recent(const fossil_jellyfish_chain_t *chain, fossil_jellyfish_chain_t *out_chain, int turn_count) {
     if (!chain || !out_chain || turn_count <= 0) return -1;
 
     fossil_jellyfish_init(out_chain);
     int added = 0;
 
     for (int i = (int)chain->count - 1; i >= 0 && added < turn_count; --i) {
-        const fossil_jellyfish_block *b = &chain->memory[i];
+        const fossil_jellyfish_block_t *b = &chain->memory[i];
         if (!b->valid) continue;
         if (strncmp(b->input, "[system]", FOSSIL_JELLYFISH_INPUT_SIZE) == 0) continue;
 
@@ -240,14 +240,14 @@ int fossil_io_chat_filter_recent(const fossil_jellyfish_chain *chain, fossil_jel
     return 0;
 }
 
-int fossil_io_chat_export_history(const fossil_jellyfish_chain *chain, const char *filepath) {
+int fossil_io_chat_export_history(const fossil_jellyfish_chain_t *chain, const char *filepath) {
     if (!chain || !filepath) return -1;
 
     FILE *f = fopen(filepath, "w");
     if (!f) return -1;
 
     for (size_t i = 0; i < chain->count; ++i) {
-        const fossil_jellyfish_block *b = &chain->memory[i];
+        const fossil_jellyfish_block_t *b = &chain->memory[i];
         if (!b->valid) continue;
 
         fprintf(f, "[%s] => %s\n", b->input, b->output);
@@ -257,7 +257,7 @@ int fossil_io_chat_export_history(const fossil_jellyfish_chain *chain, const cha
     return 0;
 }
 
-int fossil_io_chat_import_context(fossil_jellyfish_chain *chain, const char *filepath) {
+int fossil_io_chat_import_context(fossil_jellyfish_chain_t *chain, const char *filepath) {
     if (!chain || !filepath) return -1;
 
     FILE *f = fopen(filepath, "r");

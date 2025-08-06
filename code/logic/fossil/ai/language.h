@@ -56,7 +56,7 @@ int fossil_lang_detect_bias_or_falsehood(const char *input);
  *   0  → unknown
  *  -1  → contradiction detected
  */
-int fossil_lang_align_truth(const fossil_jellyfish_chain *chain, const char *input);
+int fossil_lang_align_truth(const fossil_jellyfish_chain_t *chain, const char *input);
 
 /**
  * Computes semantic similarity between two input strings.
@@ -87,7 +87,7 @@ void fossil_lang_extract_focus(const char *input, char *out, size_t out_size);
  * structure, word choice, exaggeration, and alignment.
  * Score is in [0.0, 1.0].
  */
-float fossil_lang_estimate_trust(const fossil_jellyfish_chain *chain, const char *input);
+float fossil_lang_estimate_trust(const fossil_jellyfish_chain_t *chain, const char *input);
 
 /**
  * Replace slang and contractions with formal equivalents.

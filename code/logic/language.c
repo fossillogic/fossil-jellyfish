@@ -86,11 +86,11 @@ int fossil_lang_detect_bias_or_falsehood(const char *input) {
     return 0;
 }
 
-int fossil_lang_align_truth(const fossil_jellyfish_chain *chain, const char *input) {
+int fossil_lang_align_truth(const fossil_jellyfish_chain_t *chain, const char *input) {
     if (!chain || !input) return 0;
 
     for (size_t i = 0; i < chain->count; ++i) {
-        const fossil_jellyfish_block *b = &chain->memory[i];
+        const fossil_jellyfish_block_t *b = &chain->memory[i];
         if (!b->valid) continue;
 
         if (strcmp(input, b->input) == 0) {
@@ -103,7 +103,7 @@ int fossil_lang_align_truth(const fossil_jellyfish_chain *chain, const char *inp
     return 0;
 }
 
-float fossil_lang_estimate_trust(const fossil_jellyfish_chain *chain, const char *input) {
+float fossil_lang_estimate_trust(const fossil_jellyfish_chain_t *chain, const char *input) {
     if (!input || strlen(input) < 3) return 0.1f;
 
     int contradiction = fossil_lang_align_truth(chain, input);
