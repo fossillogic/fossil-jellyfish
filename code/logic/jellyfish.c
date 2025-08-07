@@ -1200,13 +1200,6 @@ int fossil_jellyfish_compare_chains(const fossil_jellyfish_chain_t *a, const fos
 
     // For each block type, compare blocks of that type
     for (int t = JELLY_BLOCK_BASIC; t <= JELLY_BLOCK_VERIFIED; ++t) {
-        // Count blocks of this type in each chain
-        size_t a_count = 0, b_count = 0;
-        for (size_t i = 0; i < a->count; ++i)
-            if (a->memory[i].block_type == t && a->memory[i].valid) a_count++;
-        for (size_t i = 0; i < b->count; ++i)
-            if (b->memory[i].block_type == t && b->memory[i].valid) b_count++;
-
         // Compare up to the max count for this type
         size_t ai = 0, bi = 0, ac = 0, bc = 0;
         while (ac < a->count || bc < b->count) {
