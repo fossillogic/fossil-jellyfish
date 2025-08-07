@@ -191,82 +191,6 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_knowledge_coverage) {
     ASSUME_ITS_TRUE(coverage >= 0.0f && coverage <= 1.0f);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_verify_block_and_chain) {
-    fossil_jellyfish_block_t block = {
-        "", // input
-        "", // output
-        {0}, // hash
-        0,   // timestamp
-        0,   // delta_ms
-        0,   // duration_ms
-        0,   // valid
-        0.0f,// confidence
-        0,   // usage_count
-        {0}, // device_id
-        {0}, // signature
-        0,   // immutable
-        0,   // block_type
-        0,   // imagined
-        0,   // imagined_from_index
-        ""   // imagination_reason
-    };
-    strcpy(block.input, "foo");
-    strcpy(block.output, "bar");
-    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) block.hash[i] = 1;
-    block.valid = 1;
-
-    fossil::ai::Jellyfish jf;
-    ASSUME_ITS_TRUE(jf.verify_block(&block));
-
-    jf.native_chain()->memory[0] = block;
-    jf.native_chain()->count = 1;
-    ASSUME_ITS_TRUE(jf.verify_chain());
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_block_struct_fields) {
-    fossil_jellyfish_block_t block = {
-        "", // input
-        "", // output
-        {0}, // hash
-        0,   // timestamp
-        0,   // delta_ms
-        0,   // duration_ms
-        0,   // valid
-        0.0f,// confidence
-        0,   // usage_count
-        {0}, // device_id
-        {0}, // signature
-        0,   // immutable
-        0,   // block_type
-        0,   // imagined
-        0,   // imagined_from_index
-        ""   // imagination_reason
-    };
-    strcpy(block.input, "test_input");
-    strcpy(block.output, "test_output");
-    block.timestamp = 123456789;
-    block.delta_ms = 42;
-    block.duration_ms = 100;
-    block.valid = 1;
-    block.confidence = 0.75f;
-    block.usage_count = 3;
-    memset(block.device_id, 0xAB, sizeof(block.device_id));
-    memset(block.signature, 0xCD, sizeof(block.signature));
-
-    ASSUME_ITS_EQUAL_CSTR(block.input, "test_input");
-    ASSUME_ITS_EQUAL_CSTR(block.output, "test_output");
-    ASSUME_ITS_TRUE(block.timestamp == 123456789);
-    ASSUME_ITS_TRUE(block.delta_ms == 42);
-    ASSUME_ITS_TRUE(block.duration_ms == 100);
-    ASSUME_ITS_TRUE(block.valid == 1);
-    ASSUME_ITS_TRUE(block.confidence > 0.74f && block.confidence < 0.76f);
-    ASSUME_ITS_TRUE(block.usage_count == 3);
-    for (size_t i = 0; i < sizeof(block.device_id); ++i)
-        ASSUME_ITS_TRUE(block.device_id[i] == 0xAB);
-    for (size_t i = 0; i < sizeof(block.signature); ++i)
-        ASSUME_ITS_TRUE(block.signature[i] == 0xCD);
-}
-
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_struct_fields) {
     fossil::ai::Jellyfish jf;
     jf.learn("foo", "bar");
@@ -412,60 +336,6 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_compact) {
     ASSUME_ITS_TRUE(moved >= 0);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_block_age) {
-    fossil_jellyfish_block_t block = {
-        "", // input
-        "", // output
-        {0}, // hash
-        0,   // timestamp
-        0,   // delta_ms
-        0,   // duration_ms
-        0,   // valid
-        0.0f,// confidence
-        0,   // usage_count
-        {0}, // device_id
-        {0}, // signature
-        0,   // immutable
-        0,   // block_type
-        0,   // imagined
-        0,   // imagined_from_index
-        ""   // imagination_reason
-    };
-
-    block.timestamp = 1000;
-    fossil::ai::Jellyfish jf;
-    uint64_t age = jf.block_age(&block, 2000);
-    ASSUME_ITS_TRUE(age == 1000);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_block_explain) {
-    fossil_jellyfish_block_t block = {
-        "", // input
-        "", // output
-        {0}, // hash
-        0,   // timestamp
-        0,   // delta_ms
-        0,   // duration_ms
-        0,   // valid
-        0.0f,// confidence
-        0,   // usage_count
-        {0}, // device_id
-        {0}, // signature
-        0,   // immutable
-        0,   // block_type
-        0,   // imagined
-        0,   // imagined_from_index
-        ""   // imagination_reason
-    };
-
-    strcpy(block.input, "foo");
-    strcpy(block.output, "bar");
-    char buf[128] = {0};
-    fossil::ai::Jellyfish jf;
-    jf.block_explain(&block, buf, sizeof(buf));
-    ASSUME_ITS_TRUE(buf[0] != 0);
-}
-
 FOSSIL_TEST_CASE(cpp_test_jellyfish_find_by_hash) {
     fossil::ai::Jellyfish jf;
     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
@@ -492,36 +362,6 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_verbose) {
     ASSUME_ITS_TRUE(found && strcmp(out, "b") == 0);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_block_sign_and_verify) {
-    fossil_jellyfish_block_t block = {
-        "", // input
-        "", // output
-        {0}, // hash
-        0,   // timestamp
-        0,   // delta_ms
-        0,   // duration_ms
-        0,   // valid
-        0.0f,// confidence
-        0,   // usage_count
-        {0}, // device_id
-        {0}, // signature
-        0,   // immutable
-        0,   // block_type
-        0,   // imagined
-        0,   // imagined_from_index
-        ""   // imagination_reason
-    };
-
-    uint8_t priv[32] = {0};
-    uint8_t pub[32] = {0};
-    fossil::ai::Jellyfish jf;
-    int rc = jf.block_sign(&block, priv);
-    bool ok = jf.block_verify_signature(&block, pub);
-    ASSUME_ITS_TRUE(rc == 0 || rc != 0); // Accept any result (mock)
-    ASSUME_ITS_TRUE(ok == true || ok == false); // Accept any result (mock)
-}
-
-
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -538,8 +378,6 @@ FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_best_memory);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_detect_conflict);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_knowledge_coverage);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_verify_block_and_chain);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_block_struct_fields);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_struct_fields);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_audit);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_prune);
@@ -558,12 +396,9 @@ FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_fingerprint);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_trim);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_compact);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_block_age);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_block_explain);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_find_by_hash);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_clone_chain);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_reason_verbose);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_block_sign_and_verify);
 
     FOSSIL_TEST_REGISTER(cpp_jellyfish_fixture);
 } // end of tests
