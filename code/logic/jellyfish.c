@@ -277,48 +277,18 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, 
     }
 }
 
-// Removes blocks that are older and marked invalid (or just garbage collect oldest)
 void fossil_jellyfish_cleanup(fossil_jellyfish_chain_t *chain) {
-    if (!chain) return;
+    // Remove invalid or low-confidence blocks and compact the memory array.
     size_t dst = 0;
     for (size_t src = 0; src < FOSSIL_JELLYFISH_MAX_MEM; ++src) {
         fossil_jellyfish_block_t *block = &chain->memory[src];
-        int keep = 0;
-
-        if (block->valid) {
-            int type = block->block_type;
-
-            // Defensive: restrict type to known enum range
-            if (type < JELLY_BLOCK_BASIC || type > JELLY_BLOCK_VERIFIED)
-                type = JELLY_BLOCK_BASIC;
-
-            switch (type) {
-                case JELLY_BLOCK_BASIC:
-                    keep = (block->confidence >= 0.05f);
-                    break;
-                case JELLY_BLOCK_IMAGINED:
-                    keep = (block->confidence >= 0.10f &&
-                            block->imagination_reason[0] != '\0');
-                    break;
-                case JELLY_BLOCK_DERIVED:
-                    keep = (block->confidence >= 0.10f &&
-                            block->imagined_from_index > 0);
-                    break;
-                case JELLY_BLOCK_EXPERIMENTAL:
-                    keep = (block->confidence >= 0.20f);
-                    break;
-                case JELLY_BLOCK_VERIFIED:
-                    keep = 1;
-                    break;
-            }
-        }
-
-        if (keep) {
+        if (block->valid && block->confidence >= 0.05f) {
             if (dst != src) {
                 chain->memory[dst] = *block;
             }
             dst++;
         } else {
+            // Optionally clear the block for security/cleanliness
             memset(block, 0, sizeof(fossil_jellyfish_block_t));
         }
     }
