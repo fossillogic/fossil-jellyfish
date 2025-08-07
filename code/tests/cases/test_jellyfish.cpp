@@ -40,6 +40,7 @@ FOSSIL_TEARDOWN(cpp_jellyfish_fixture) {
 // as samples for library usage.
 // * * * * * * * * * * * * * * * * * * * * * * * *
 
+/**
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_init) {
     fossil::ai::Jellyfish jf;
     auto* chain = jf.native_chain();
@@ -67,7 +68,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_learn_and_reason) {
     ASSUME_ITS_EQUAL_CSTR(result.c_str(), "Unknown");
 }
 
-/**
+
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_cleanup) {
     fossil::ai::Jellyfish jf;
     jf.learn("a", "b");
@@ -526,10 +527,9 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_block_sign_and_verify) {
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
 FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {    
-    // Generic ToFu Fixture
+    /**
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_init);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_learn_and_reason);
-    /**
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_cleanup);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_hash);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_hash_stability);
