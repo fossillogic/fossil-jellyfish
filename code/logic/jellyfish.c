@@ -118,7 +118,7 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
 
 // Main Source Implementation
 
-void fossil_jellyfish_init(fossil_jellyfish_chain *chain) {
+void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
     if (!chain) return;
     chain->count = 0;
     memset(chain->memory, 0, sizeof(chain->memory));
