@@ -13,6 +13,15 @@
  */
 #include "fossil/ai/jellyfish.h"
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#include <wincrypt.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/time.h>
+#endif
+
 // HASH Algorithm magic
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -33,26 +42,34 @@ uint64_t get_time_microseconds(void) {
 #endif
 
 static uint64_t get_device_salt(void) {
-    // FNV-1a 64-bit base offset
     uint64_t hash = 0xcbf29ce484222325ULL;
 
-    // Cross-platform user and home detection
+    // Try system randomness first
 #if defined(_WIN32) || defined(_WIN64)
-    const char *vars[] = {
-        getenv("USERNAME"),
-        getenv("USERPROFILE"),
-        getenv("COMPUTERNAME")
-    };
+    HCRYPTPROV hProv;
+    if (CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+        CryptGenRandom(hProv, sizeof(hash), (BYTE*)&hash);
+        CryptReleaseContext(hProv, 0);
+        return hash;
+    }
 #else
-    const char *vars[] = {
-        getenv("USER"),
-        getenv("HOME"),
-        getenv("SHELL"),
-        getenv("HOSTNAME")
-    };
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd >= 0) {
+        if (read(fd, &hash, sizeof(hash)) == sizeof(hash)) {
+            close(fd);
+            return hash;
+        }
+        close(fd);
+    }
 #endif
 
-    // Mix in each variable if it exists
+    // Fallback: environment variables
+#if defined(_WIN32) || defined(_WIN64)
+    const char *vars[] = { getenv("USERNAME"), getenv("USERPROFILE"), getenv("COMPUTERNAME") };
+#else
+    const char *vars[] = { getenv("USER"), getenv("HOME"), getenv("SHELL"), getenv("HOSTNAME") };
+#endif
+
     for (size_t v = 0; v < sizeof(vars) / sizeof(vars[0]); ++v) {
         const char *val = vars[v];
         if (val) {
@@ -69,50 +86,65 @@ static uint64_t get_device_salt(void) {
 void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_out) {
     const uint64_t PRIME = 0x100000001b3ULL;
     static uint64_t SALT = 0;
-    if (SALT == 0) SALT = get_device_salt();  // Initialize salt once
+    if (SALT == 0) SALT = get_device_salt();
 
     uint64_t state1 = 0xcbf29ce484222325ULL ^ SALT;
     uint64_t state2 = 0x84222325cbf29ce4ULL ^ ~SALT;
+    uint64_t nonce = get_time_microseconds();
 
     size_t in_len = strlen(input);
     size_t out_len = strlen(output);
 
-    uint64_t nonce = get_time_microseconds();  // Microsecond resolution
-
+    // Interleaved walk: input
     for (size_t i = 0; i < in_len; ++i) {
-        state1 ^= (uint8_t)input[i];
+        size_t j = (i * 17 + 31) % in_len;
+        uint8_t c = (uint8_t)input[j];
+        state1 ^= c ^ (state1 >> 7);
         state1 *= PRIME;
-        state1 ^= (state1 >> 27);
-        state1 ^= (state1 << 33);
+        state1 ^= (state1 << 29);
     }
 
+    // Interleaved walk: output
     for (size_t i = 0; i < out_len; ++i) {
-        state2 ^= (uint8_t)output[i];
+        size_t j = (i * 11 + 19) % out_len;
+        uint8_t c = (uint8_t)output[j];
+        state2 ^= c ^ (state2 >> 5);
         state2 *= PRIME;
-        state2 ^= (state2 >> 29);
-        state2 ^= (state2 << 31);
+        state2 ^= (state2 << 27);
     }
 
-    // Nonce and length entropy
-    state1 ^= nonce ^ ((uint64_t)in_len << 32);
-    state2 ^= ~nonce ^ ((uint64_t)out_len << 16);
-
-    // Mixing rounds
-    for (int i = 0; i < 6; ++i) {
-        state1 += (state2 ^ (state1 >> 17));
-        state2 += (state1 ^ (state2 >> 13));
-        state1 ^= (state1 << 41);
-        state2 ^= (state2 << 37);
-        state1 *= PRIME;
-        state2 *= PRIME;
+    // Chunk compression: input blocks
+    uint64_t h1 = state1, h2 = state2;
+    for (size_t i = 0; i + 8 <= in_len; i += 8) {
+        uint64_t chunk = 0;
+        memcpy(&chunk, &input[i], 8);
+        h1 ^= chunk;
+        h1 *= PRIME;
+        h2 ^= h1;
+        h2 *= PRIME;
     }
 
+    // Length and nonce mix
+    h1 ^= nonce ^ ((uint64_t)in_len << 32);
+    h2 ^= ~nonce ^ ((uint64_t)out_len << 16);
+
+    // Dynamic mixing rounds (6–9)
+    int rounds = 6 + (nonce % 4);
+    for (int i = 0; i < rounds; ++i) {
+        h1 += (h2 ^ (h1 >> 17));
+        h2 += (h1 ^ (h2 >> 13));
+        h1 ^= (h1 << (41 - (i % 7)));
+        h2 ^= (h2 << (37 - (i % 5)));
+        h1 *= PRIME;
+        h2 *= PRIME;
+    }
+
+    // Final digest whitening
+    uint64_t digest = h1 ^ h2 ^ SALT ^ nonce;
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
-        uint64_t mixed = (i % 2 == 0) ? state1 : state2;
-        mixed ^= (mixed >> ((i % 7) + 13));
-        mixed *= PRIME;
-        mixed ^= SALT;
-        hash_out[i] = (uint8_t)((mixed >> (8 * (i % 8))) & 0xFF);
+        digest ^= (digest << (13 + (i % 5)));
+        digest *= PRIME;
+        hash_out[i] = (uint8_t)((digest >> (8 * (i % 8))) & 0xFF);
     }
 }
 
