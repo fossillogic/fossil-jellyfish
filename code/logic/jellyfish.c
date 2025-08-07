@@ -351,60 +351,60 @@ int fossil_jellyfish_audit(const fossil_jellyfish_chain_t *chain) {
             case JELLY_BLOCK_BASIC:
                 // BASIC: Should not be imagined, should have input/output, confidence in [0,1]
                 if (block->imagined) {
-                    printf("[AUDIT] Block %u: BASIC block marked as imagined.\n", i);
+                    printf("[AUDIT] Block %llu: BASIC block marked as imagined.\n", (unsigned long long)i);
                     issues++;
                 }
                 if (strlen(block->input) == 0 || strlen(block->output) == 0) {
-                    printf("[AUDIT] Block %u: BASIC block missing input or output.\n", i);
+                    printf("[AUDIT] Block %llu: BASIC block missing input or output.\n", (unsigned long long)i);
                     issues++;
                 }
                 if (block->confidence < 0.0f || block->confidence > 1.0f) {
-                    printf("[AUDIT] Block %u: BASIC block has invalid confidence %.2f.\n", i, block->confidence);
+                    printf("[AUDIT] Block %llu: BASIC block has invalid confidence %.2f.\n", (unsigned long long)i, block->confidence);
                     issues++;
                 }
                 break;
             case JELLY_BLOCK_IMAGINED:
                 // IMAGINED: Must be imagined, must have a reason
                 if (!block->imagined) {
-                    printf("[AUDIT] Block %u: IMAGINED block not marked as imagined.\n", i);
+                    printf("[AUDIT] Block %llu: IMAGINED block not marked as imagined.\n", (unsigned long long)i);
                     issues++;
                 }
                 if (strlen(block->imagination_reason) == 0) {
-                    printf("[AUDIT] Block %u: IMAGINED block missing imagination reason.\n", i);
+                    printf("[AUDIT] Block %llu: IMAGINED block missing imagination reason.\n", (unsigned long long)i);
                     issues++;
                 }
                 break;
             case JELLY_BLOCK_DERIVED:
                 // DERIVED: Should have a source index if imagined, and a reason
                 if (block->imagined && block->imagined_from_index == 0) {
-                    printf("[AUDIT] Block %u: DERIVED block imagined but missing source index.\n", i);
+                    printf("[AUDIT] Block %llu: DERIVED block imagined but missing source index.\n", (unsigned long long)i);
                     issues++;
                 }
                 if (block->imagined && strlen(block->imagination_reason) == 0) {
-                    printf("[AUDIT] Block %u: DERIVED block imagined but missing reason.\n", i);
+                    printf("[AUDIT] Block %llu: DERIVED block imagined but missing reason.\n", (unsigned long long)i);
                     issues++;
                 }
                 break;
             case JELLY_BLOCK_EXPERIMENTAL:
                 // EXPERIMENTAL: Should not have high confidence
                 if (block->confidence > 0.9f) {
-                    printf("[AUDIT] Block %u: EXPERIMENTAL block has suspiciously high confidence.\n", i);
+                    printf("[AUDIT] Block %llu: EXPERIMENTAL block has suspiciously high confidence.\n", (unsigned long long)i);
                     issues++;
                 }
                 break;
             case JELLY_BLOCK_VERIFIED:
                 // VERIFIED: Should be immutable, signature must verify
                 if (!block->immutable) {
-                    printf("[AUDIT] Block %u: VERIFIED block not marked immutable.\n", i);
+                    printf("[AUDIT] Block %llu: VERIFIED block not marked immutable.\n", (unsigned long long)i);
                     issues++;
                 }
                 if (!fossil_jellyfish_block_verify_signature(block, block->device_id)) {
-                    printf("[AUDIT] Block %u: VERIFIED block signature verification failed.\n", i);
+                    printf("[AUDIT] Block %llu: VERIFIED block signature verification failed.\n", (unsigned long long)i);
                     issues++;
                 }
                 break;
             default:
-                printf("[AUDIT] Block %u: Unknown block type %d.\n", i, block->block_type);
+                printf("[AUDIT] Block %llu: Unknown block type %d.\n", (unsigned long long)i, block->block_type);
                 issues++;
                 break;
         }
