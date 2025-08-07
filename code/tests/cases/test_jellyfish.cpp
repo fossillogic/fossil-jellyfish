@@ -198,7 +198,24 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_knowledge_coverage) {
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_verify_block_and_chain) {
-    fossil_jellyfish_block_t block = {0};
+    fossil_jellyfish_block_t block = {
+        "", // input
+        "", // output
+        {0}, // hash
+        0,   // timestamp
+        0,   // delta_ms
+        0,   // duration_ms
+        0,   // valid
+        0.0f,// confidence
+        0,   // usage_count
+        {0}, // device_id
+        {0}, // signature
+        0,   // immutable
+        0,   // block_type
+        0,   // imagined
+        0,   // imagined_from_index
+        ""   // imagination_reason
+    };
     strcpy(block.input, "foo");
     strcpy(block.output, "bar");
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) block.hash[i] = 1;
@@ -213,7 +230,24 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_verify_block_and_chain) {
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_block_struct_fields) {
-    fossil_jellyfish_block_t block = {0};
+    fossil_jellyfish_block_t block = {
+        "", // input
+        "", // output
+        {0}, // hash
+        0,   // timestamp
+        0,   // delta_ms
+        0,   // duration_ms
+        0,   // valid
+        0.0f,// confidence
+        0,   // usage_count
+        {0}, // device_id
+        {0}, // signature
+        0,   // immutable
+        0,   // block_type
+        0,   // imagined
+        0,   // imagined_from_index
+        ""   // imagination_reason
+    };
     strcpy(block.input, "test_input");
     strcpy(block.output, "test_output");
     block.timestamp = 123456789;
@@ -296,7 +330,24 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_trust_score) {
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_mark_immutable) {
-    fossil_jellyfish_block_t block = {0};
+    fossil_jellyfish_block_t block = {
+        "", // input
+        "", // output
+        {0}, // hash
+        0,   // timestamp
+        0,   // delta_ms
+        0,   // duration_ms
+        0,   // valid
+        0.0f,// confidence
+        0,   // usage_count
+        {0}, // device_id
+        {0}, // signature
+        0,   // immutable
+        0,   // block_type
+        0,   // imagined
+        0,   // imagined_from_index
+        ""   // imagination_reason
+    };
     fossil_jellyfish_mark_immutable(&block);
     // No easy way to check, but should not crash
     ASSUME_ITS_TRUE(1);
@@ -335,7 +386,25 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_best_match) {
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_redact_block) {
-    fossil_jellyfish_block_t block = {0};
+    fossil_jellyfish_block_t block = {
+        "", // input
+        "", // output
+        {0}, // hash
+        0,   // timestamp
+        0,   // delta_ms
+        0,   // duration_ms
+        0,   // valid
+        0.0f,// confidence
+        0,   // usage_count
+        {0}, // device_id
+        {0}, // signature
+        0,   // immutable
+        0,   // block_type
+        0,   // imagined
+        0,   // imagined_from_index
+        ""   // imagination_reason
+    };
+
     strcpy(block.input, "secret");
     strcpy(block.output, "data");
     int rc = fossil_jellyfish_redact_block(&block);
@@ -349,11 +418,24 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_stats) {
     float ratio[5] = {0};
     fossil_jellyfish_learn(&chain, "a", "b");
     fossil_jellyfish_chain_stats(&chain, valid, avg, ratio);
-    ASSUME_ITS_TRUE(valid[0] >= 0);
+    ASSUME_ITS_TRUE(valid[0] <= chain.count);
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_compare_chains) {
-    fossil_jellyfish_chain_t a = {0}, b = {0};
+    fossil_jellyfish_chain_t a = {
+        { {0} }, // memory (all blocks zeroed)
+        0,       // count
+        {0},     // device_id
+        0,       // created_at
+        0        // updated_at
+    };
+    fossil_jellyfish_chain_t b = {
+        { {0} }, // memory (all blocks zeroed)
+        0,       // count
+        {0},     // device_id
+        0,       // created_at
+        0        // updated_at
+    };
     fossil_jellyfish_learn(&a, "a", "b");
     fossil_jellyfish_learn(&b, "a", "b");
     int diff = fossil_jellyfish_compare_chains(&a, &b);
@@ -384,14 +466,50 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_compact) {
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_block_age) {
-    fossil_jellyfish_block_t block = {0};
+    fossil_jellyfish_block_t block = {
+        "", // input
+        "", // output
+        {0}, // hash
+        0,   // timestamp
+        0,   // delta_ms
+        0,   // duration_ms
+        0,   // valid
+        0.0f,// confidence
+        0,   // usage_count
+        {0}, // device_id
+        {0}, // signature
+        0,   // immutable
+        0,   // block_type
+        0,   // imagined
+        0,   // imagined_from_index
+        ""   // imagination_reason
+    };
+
     block.timestamp = 1000;
     uint64_t age = fossil_jellyfish_block_age(&block, 2000);
     ASSUME_ITS_TRUE(age == 1000);
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_block_explain) {
-    fossil_jellyfish_block_t block = {0};
+    fossil_jellyfish_block_t block = {
+        "", // input
+        "", // output
+        {0}, // hash
+        0,   // timestamp
+        0,   // delta_ms
+        0,   // duration_ms
+        0,   // valid
+        0.0f,// confidence
+        0,   // usage_count
+        {0}, // device_id
+        {0}, // signature
+        0,   // immutable
+        0,   // block_type
+        0,   // imagined
+        0,   // imagined_from_index
+        ""   // imagination_reason
+    };
+
     strcpy(block.input, "foo");
     strcpy(block.output, "bar");
     char buf[128] = {0};
@@ -426,7 +544,25 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_verbose) {
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_block_sign_and_verify) {
-    fossil_jellyfish_block_t block = {0};
+    fossil_jellyfish_block_t block = {
+        "", // input
+        "", // output
+        {0}, // hash
+        0,   // timestamp
+        0,   // delta_ms
+        0,   // duration_ms
+        0,   // valid
+        0.0f,// confidence
+        0,   // usage_count
+        {0}, // device_id
+        {0}, // signature
+        0,   // immutable
+        0,   // block_type
+        0,   // imagined
+        0,   // imagined_from_index
+        ""   // imagination_reason
+    };
+
     uint8_t priv[32] = {0};
     uint8_t pub[32] = {0};
     int rc = fossil_jellyfish_block_sign(&block, priv);
