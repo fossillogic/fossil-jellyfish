@@ -500,7 +500,7 @@ namespace ai {
          */
         std::array<uint8_t, 32> hash(const std::string& input, const std::string& output) {
             std::array<uint8_t, 32> hash_result;
-            fossil_jellyfish_hash(&chain_, input.c_str(), output.c_str(), hash_result.data());
+            fossil_jellyfish_hash(input.c_str(), output.c_str(), hash_result.data());
             return hash_result;
         }
 
