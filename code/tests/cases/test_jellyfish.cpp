@@ -40,10 +40,8 @@ FOSSIL_TEARDOWN(cpp_jellyfish_fixture) {
 // as samples for library usage.
 // * * * * * * * * * * * * * * * * * * * * * * * *
 
-using fossil::ai::Jellyfish;
-
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_init) {
-    Jellyfish jf;
+    fossil::ai::Jellyfish jf;
     auto* chain = jf.native_chain();
     ASSUME_ITS_EQUAL_SIZE(chain->count, 0);
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
@@ -52,7 +50,7 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_init) {
 }
 
 FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_learn_and_reason) {
-    Jellyfish jf;
+    fossil::ai::Jellyfish jf;
 
     jf.learn("hello", "world");
     auto* chain = jf.native_chain();
