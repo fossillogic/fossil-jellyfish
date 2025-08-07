@@ -24,6 +24,9 @@
 
 // HASH Algorithm magic
 
+#define ROTL64(x, r) (((x) << (r)) | ((x) >> (64 - (r))))
+#define ROTR64(x, r) (((x) >> (r)) | ((x) << (64 - (r))))
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 uint64_t get_time_microseconds(void) {
@@ -164,55 +167,57 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
     size_t in_len = strlen(input);
     size_t out_len = strlen(output);
 
-    // input mixing with SBOX
+    // Input mixing using SBOX and ROTL
     for (size_t i = 0; i < in_len; ++i) {
         size_t j = (i * 17 + 31) % in_len;
         uint8_t c = (uint8_t)input[j];
-        state1 ^= SBOX[c] ^ (state1 >> 7);
-        state1 *= PRIME;
-        state1 ^= (state1 << 29);
+        uint8_t s = SBOX[c];
+        state1 ^= ROTL64(s ^ state1, 13);
+        state1 = ROTL64(state1 ^ (state1 >> 7), 31) * PRIME;
     }
-    
-    // output mixing with SBOX
+
+    // Output mixing using SBOX and ROTR
     for (size_t i = 0; i < out_len; ++i) {
         size_t j = (i * 11 + 19) % out_len;
         uint8_t c = (uint8_t)output[j];
-        state2 ^= SBOX[c] ^ (state2 >> 5);
-        state2 *= PRIME;
-        state2 ^= (state2 << 27);
+        uint8_t s = SBOX[c];
+        state2 ^= ROTR64(s ^ state2, 11);
+        state2 = ROTR64(state2 ^ (state2 >> 5), 29) * PRIME;
     }
 
-    // Chunk compression: input blocks
+    // Chunk compression: 8-byte blocks with SBOX feedback
     uint64_t h1 = state1, h2 = state2;
     for (size_t i = 0; i + 8 <= in_len; i += 8) {
         uint64_t chunk = 0;
         memcpy(&chunk, &input[i], 8);
+        chunk ^= (uint64_t)SBOX[input[i] & 0xFF] << 56;
         h1 ^= chunk;
-        h1 *= PRIME;
+        h1 = ROTL64(h1, 23) * PRIME;
         h2 ^= h1;
-        h2 *= PRIME;
+        h2 = ROTR64(h2, 17) * PRIME;
     }
 
-    // Length and nonce mix
-    h1 ^= nonce ^ ((uint64_t)in_len << 32);
-    h2 ^= ~nonce ^ ((uint64_t)out_len << 16);
+    // Final mixing with nonce and lengths
+    h1 ^= nonce ^ ((uint64_t)in_len << 32) ^ (ROTL64(state2, 11));
+    h2 ^= ~nonce ^ ((uint64_t)out_len << 16) ^ (ROTR64(state1, 7));
 
-    // Dynamic mixing rounds (6–9)
+    // Dynamic avalanche rounds
     int rounds = 6 + (nonce % 4);
     for (int i = 0; i < rounds; ++i) {
-        h1 += (h2 ^ (h1 >> 17));
-        h2 += (h1 ^ (h2 >> 13));
-        h1 ^= (h1 << (41 - (i % 7)));
-        h2 ^= (h2 << (37 - (i % 5)));
+        h1 += ROTL64(h2 ^ (h1 >> 17), (i % 29) + 5);
+        h2 += ROTR64(h1 ^ (h2 >> 13), (i % 31) + 3);
+        h1 ^= ROTL64(h1, 41 - (i % 7));
+        h2 ^= ROTR64(h2, 37 - (i % 5));
         h1 *= PRIME;
         h2 *= PRIME;
     }
 
-    // Final digest whitening
+    // Final digest whitening with SBOX and rotation
     uint64_t digest = h1 ^ h2 ^ SALT ^ nonce;
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) {
-        digest ^= (digest << (13 + (i % 5)));
-        digest *= PRIME;
+        uint8_t s = SBOX[(digest >> (i % 8)) & 0xFF];
+        digest ^= ((uint64_t)s << (8 * (i % 8)));
+        digest = ROTL64(digest, 13 + (i % 5)) * PRIME;
         hash_out[i] = (uint8_t)((digest >> (8 * (i % 8))) & 0xFF);
     }
 }
