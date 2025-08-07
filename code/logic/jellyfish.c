@@ -118,24 +118,10 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
 
 // Main Source Implementation
 
-void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
+void fossil_jellyfish_init(fossil_jellyfish_chain *chain) {
     if (!chain) return;
-
     chain->count = 0;
-    memset(chain->device_id, 0, sizeof(chain->device_id));
-    chain->created_at = (uint64_t)time(NULL);
-    chain->updated_at = chain->created_at;
-
-    // Initialize reserved blocks for each block type (if within memory range)
-    for (int t = JELLY_BLOCK_BASIC; t <= JELLY_BLOCK_VERIFIED && t < FOSSIL_JELLYFISH_MAX_MEM; ++t) {
-        fossil_jellyfish_block_t *block = &chain->memory[t];
-        memset(block, 0, sizeof(fossil_jellyfish_block_t)); // Clean slate
-        block->block_type = t;
-        block->valid = 0;
-        block->confidence = 0.0f;
-        block->immutable = (t == JELLY_BLOCK_VERIFIED) ? 1 : 0;
-        block->imagined = (t == JELLY_BLOCK_IMAGINED || t == JELLY_BLOCK_DERIVED || t == JELLY_BLOCK_EXPERIMENTAL) ? 1 : 0;
-    }
+    memset(chain->memory, 0, sizeof(chain->memory));
 }
 
 void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, const char *output) {
