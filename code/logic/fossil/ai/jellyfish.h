@@ -474,6 +474,7 @@ bool fossil_jellyfish_block_verify_signature(const fossil_jellyfish_block_t *blo
 #ifdef __cplusplus
 }
 #include <stdexcept>
+#include <cstdint>
 #include <vector>
 #include <array>
 #include <string>
