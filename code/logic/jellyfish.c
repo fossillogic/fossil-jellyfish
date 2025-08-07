@@ -1208,7 +1208,6 @@ int fossil_jellyfish_compare_chains(const fossil_jellyfish_chain_t *a, const fos
             if (b->memory[i].block_type == t && b->memory[i].valid) b_count++;
 
         // Compare up to the max count for this type
-        size_t max = (a_count > b_count) ? a_count : b_count;
         size_t ai = 0, bi = 0, ac = 0, bc = 0;
         while (ac < a->count || bc < b->count) {
             // Find next valid block of this type in a
