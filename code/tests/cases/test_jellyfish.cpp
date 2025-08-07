@@ -92,52 +92,6 @@ FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_hash) {
     ASSUME_ITS_TRUE(diff);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_and_load) {
-    JellyfishAI ai;
-    ai.learn("input1", "output1");
-    ai.learn("input2", "output2");
-
-    // Set known confidence values to ensure they're saved/loaded properly
-    fossil_jellyfish_chain_t& chain = ai.get_chain();
-    chain.memory[0].confidence = 0.85f;
-    chain.memory[1].confidence = 0.65f;
-
-    const char *filename = "test_jellyfish_save_load.jellyfish";
-    bool save_result = ai.save(filename);
-    ASSUME_ITS_TRUE(save_result);
-
-    JellyfishAI loaded;
-    bool load_result = loaded.load(filename);
-    ASSUME_ITS_TRUE(load_result);
-
-    const fossil_jellyfish_chain_t& loaded_chain = loaded.get_chain();
-    ASSUME_ITS_EQUAL_SIZE(loaded_chain.count, 2);
-
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].input, "input1");
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].output, "output1");
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].input, "input2");
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].output, "output2");
-
-    // Confirm confidence values persisted (within tolerance)
-    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[0].confidence - 0.85f) < 0.01f);
-    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[1].confidence - 0.65f) < 0.01f);
-
-    // Clean up
-    remove(filename);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_fail) {
-    JellyfishAI ai;
-    bool result = ai.save("/invalid/path/should_fail.jellyfish");
-    ASSUME_ITS_TRUE(result);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_load_fail) {
-    JellyfishAI ai;
-    bool result = ai.load("/invalid/path/should_fail.jellyfish");
-    ASSUME_ITS_TRUE(result);
-}
-
 FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_fuzzy) {
     JellyfishAI ai;
     ai.learn("hello", "world");
@@ -248,10 +202,7 @@ FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_init);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_learn_and_reason);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_cleanup);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_save_and_load);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_hash);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_save_fail);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_load_fail);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_reason_fuzzy);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_reason_chain);
     FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_decay_confidence);

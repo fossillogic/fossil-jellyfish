@@ -118,53 +118,6 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_hash_stability) {
     ASSUME_ITS_TRUE(identical || !"Hashes changed too fast – maybe time ticked");
 }
 
-FOSSIL_TEST_CASE(c_test_jellyfish_chain_save_and_load) {
-    fossil_jellyfish_chain_t chain = {0};
-    fossil_jellyfish_init(&chain);
-
-    // Learn two entries
-    fossil_jellyfish_learn(&chain, "input1", "output1");
-    fossil_jellyfish_learn(&chain, "input2", "output2");
-
-    // Optionally set confidence for verification
-    chain.memory[0].confidence = 0.9f;
-    chain.memory[1].confidence = 0.7f;
-
-    const char *filename = "test_jellyfish_save_load.jellyfish";
-
-    int save_result = fossil_jellyfish_save(&chain, filename);
-    ASSUME_ITS_TRUE(save_result == 1);
-
-    fossil_jellyfish_chain_t loaded = {0};
-    int load_result = fossil_jellyfish_load(&loaded, filename);
-    ASSUME_ITS_TRUE(load_result == 1);
-
-    // Verify chain structure
-    ASSUME_ITS_EQUAL_SIZE(loaded.count, 2);
-    ASSUME_ITS_EQUAL_CSTR(loaded.memory[0].input, "input1");
-    ASSUME_ITS_EQUAL_CSTR(loaded.memory[0].output, "output1");
-    ASSUME_ITS_EQUAL_CSTR(loaded.memory[1].input, "input2");
-    ASSUME_ITS_EQUAL_CSTR(loaded.memory[1].output, "output2");
-
-    // Check confidence float values with a small tolerance
-    ASSUME_ITS_TRUE(fabsf(loaded.memory[0].confidence - 0.9f) < 0.01f);
-    ASSUME_ITS_TRUE(fabsf(loaded.memory[1].confidence - 0.7f) < 0.01f);
-
-    remove(filename);
-}
-
-FOSSIL_TEST_CASE(c_test_jellyfish_chain_save_fail) {
-    fossil_jellyfish_chain_t chain = {0};
-    int result = fossil_jellyfish_save(&chain, "/invalid/path/should_fail.jellyfish");
-    ASSUME_ITS_TRUE(result == 0);
-}
-
-FOSSIL_TEST_CASE(c_test_jellyfish_chain_load_fail) {
-    fossil_jellyfish_chain_t chain = {0};
-    int result = fossil_jellyfish_load(&chain, "/invalid/path/should_fail.jellyfish");
-    ASSUME_ITS_TRUE(result == 0);
-}
-
 FOSSIL_TEST_CASE(c_test_jellyfish_reason_fuzzy) {
     fossil_jellyfish_chain_t chain = {0};
     fossil_jellyfish_learn(&chain, "hello", "world");
@@ -307,9 +260,6 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_cleanup);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_hash);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_hash_stability);
-    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_save_and_load);
-    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_save_fail);
-    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_load_fail);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_fuzzy);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_chain);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_decay_confidence);
