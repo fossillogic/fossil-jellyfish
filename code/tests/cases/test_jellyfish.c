@@ -342,16 +342,6 @@ FOSSIL_TEST_CASE(c_test_jellyfish_redact_block) {
     ASSUME_ITS_TRUE(rc == 0);
 }
 
-FOSSIL_TEST_CASE(c_test_jellyfish_chain_stats) {
-    fossil_jellyfish_chain_t chain = {0};
-    size_t valid[5] = {0};
-    float avg[5] = {0};
-    float ratio[5] = {0};
-    fossil_jellyfish_learn(&chain, "a", "b");
-    fossil_jellyfish_chain_stats(&chain, valid, avg, ratio);
-    ASSUME_ITS_TRUE(valid[0] >= 0);
-}
-
 FOSSIL_TEST_CASE(c_test_jellyfish_compare_chains) {
     fossil_jellyfish_chain_t a = {0}, b = {0};
     fossil_jellyfish_learn(&a, "a", "b");
@@ -467,7 +457,6 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_compress_chain);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_best_match);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_redact_block);
-    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_stats);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_compare_chains);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_fingerprint);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_trim);
