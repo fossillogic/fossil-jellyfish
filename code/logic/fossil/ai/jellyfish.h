@@ -533,26 +533,6 @@ namespace ai {
         }
 
         /**
-         * Save the current state of the jellyfish AI to a file.
-         * 
-         * @param filepath The path to the file to save to.
-         * @return True if the save was successful, false otherwise.
-         */
-        bool save(const char* filepath) const {
-            return fossil_jellyfish_save(&chain_, filepath) == 0;
-        }
-
-        /**
-         * Load the jellyfish AI state from a file.
-         * 
-         * @param filepath The path to the file to load from.
-         * @return True if the load was successful, false otherwise.
-         */
-        bool load(const char* filepath) {
-            return fossil_jellyfish_load(&chain_, filepath) == 0;
-        }
-
-        /**
          * Decay the confidence of the AI's knowledge.
          * 
          * @param decay_rate The rate at which to decay confidence.
