@@ -121,19 +121,15 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
 void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
     if (!chain) return;
 
-    // Allocate memory for blocks
-    if (!chain->memory) {
-        chain->memory = calloc(FOSSIL_JELLYFISH_MAX_MEM, sizeof(fossil_jellyfish_block_t));
-        if (!chain->memory) abort(); // or return an error
-    }
-
     chain->count = 0;
     memset(chain->device_id, 0, sizeof(chain->device_id));
     chain->created_at = (uint64_t)time(NULL);
     chain->updated_at = chain->created_at;
 
+    // Initialize reserved blocks for each block type (if within memory range)
     for (int t = JELLY_BLOCK_BASIC; t <= JELLY_BLOCK_VERIFIED && t < FOSSIL_JELLYFISH_MAX_MEM; ++t) {
         fossil_jellyfish_block_t *block = &chain->memory[t];
+        memset(block, 0, sizeof(fossil_jellyfish_block_t)); // Clean slate
         block->block_type = t;
         block->valid = 0;
         block->confidence = 0.0f;
@@ -302,34 +298,35 @@ void fossil_jellyfish_cleanup(fossil_jellyfish_chain_t *chain) {
     for (size_t src = 0; src < FOSSIL_JELLYFISH_MAX_MEM; ++src) {
         fossil_jellyfish_block_t *block = &chain->memory[src];
         int keep = 0;
+
         if (block->valid) {
-            switch (block->block_type) {
+            int type = block->block_type;
+
+            // Defensive: restrict type to known enum range
+            if (type < JELLY_BLOCK_BASIC || type > JELLY_BLOCK_VERIFIED)
+                type = JELLY_BLOCK_BASIC;
+
+            switch (type) {
                 case JELLY_BLOCK_BASIC:
-                    // Keep if confidence is reasonable
                     keep = (block->confidence >= 0.05f);
                     break;
                 case JELLY_BLOCK_IMAGINED:
-                    // Keep only if confidence is moderate and has a reason
-                    keep = (block->confidence >= 0.10f && block->imagination_reason[0] != '\0');
+                    keep = (block->confidence >= 0.10f &&
+                            block->imagination_reason[0] != '\0');
                     break;
                 case JELLY_BLOCK_DERIVED:
-                    // Keep if confidence is moderate and has a source
-                    keep = (block->confidence >= 0.10f && block->imagined_from_index > 0);
+                    keep = (block->confidence >= 0.10f &&
+                            block->imagined_from_index > 0);
                     break;
                 case JELLY_BLOCK_EXPERIMENTAL:
-                    // Keep only if confidence is not too low, but stricter
                     keep = (block->confidence >= 0.20f);
                     break;
                 case JELLY_BLOCK_VERIFIED:
-                    // Keep all verified blocks unless explicitly invalid
                     keep = 1;
-                    break;
-                default:
-                    // Unknown type: treat as basic
-                    keep = (block->confidence >= 0.05f);
                     break;
             }
         }
+
         if (keep) {
             if (dst != src) {
                 chain->memory[dst] = *block;
