@@ -13,6 +13,41 @@
  */
 #include "fossil/ai/language.h"
 
+void fossil_lang_process(const fossil_lang_pipeline_t *pipe, const char *input, fossil_lang_result_t *out) {
+    char working[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE] = {0};
+    const char *src = input;
+
+    if (pipe->normalize) {
+        fossil_lang_normalize(input, working, sizeof(working));
+        src = working;
+        strncpy(out->normalized, working, sizeof(out->normalized) - 1);
+    }
+
+    if (pipe->tokenize) {
+        out->token_count = fossil_lang_tokenize(src, out->tokens, 64);
+    }
+
+    if (pipe->detect_emotion) {
+        out->emotion_score = fossil_lang_detect_emotion(src);
+    }
+
+    if (pipe->detect_bias) {
+        out->bias_detected = fossil_lang_detect_bias_or_falsehood(src);
+    }
+
+    if (pipe->is_question) {
+        out->is_question = fossil_lang_is_question(src);
+    }
+
+    if (pipe->extract_focus) {
+        fossil_lang_extract_focus(src, out->focus, sizeof(out->focus));
+    }
+
+    if (pipe->summarize) {
+        fossil_lang_summarize(src, out->summary, sizeof(out->summary));
+    }
+}
+
 size_t fossil_lang_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens) {
     size_t count = 0, len = strlen(input);
     char word[FOSSIL_JELLYFISH_TOKEN_SIZE] = {0};
@@ -250,4 +285,64 @@ float fossil_lang_similarity(const char *a, const char *b) {
     if (total == 0) return 0.0f;
 
     return (2.0f * match) / total; // Jaccard-based estimate
+}
+
+void fossil_lang_trace_log(const char *category, const char *input, float score) {
+    fprintf(stderr, "[NLP-TRACE] [%s] Score=%.3f | Input=\"%s\"\n", category, score, input);
+}
+
+float fossil_lang_embedding_similarity(const float *vec_a, const float *vec_b, size_t len) {
+    float dot = 0.0f, norm_a = 0.0f, norm_b = 0.0f;
+
+    for (size_t i = 0; i < len; ++i) {
+        dot += vec_a[i] * vec_b[i];
+        norm_a += vec_a[i] * vec_a[i];
+        norm_b += vec_b[i] * vec_b[i];
+    }
+
+    if (norm_a == 0.0f || norm_b == 0.0f) return 0.0f;
+    return dot / (sqrtf(norm_a) * sqrtf(norm_b));
+}
+
+typedef struct {
+    const char *word;
+    const char *alt;
+} synonym_pair;
+
+static const synonym_pair replacements[] = {
+    {"great", "excellent"},
+    {"happy", "joyful"},
+    {"sad", "unhappy"},
+    {"angry", "mad"},
+    {"love", "adore"},
+    {"hate", "dislike"},
+    {"good", "nice"}
+};
+
+void fossil_lang_generate_variants(const char *input, char outputs[][256], size_t max_outputs) {
+    size_t count = 0;
+
+    for (size_t i = 0; i < sizeof(replacements) / sizeof(replacements[0]); ++i) {
+        if (strstr(input, replacements[i].word) != NULL && count < max_outputs) {
+            char buf[256];
+            strncpy(buf, input, sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+
+            char *pos = strstr(buf, replacements[i].word);
+            if (pos) {
+                size_t prefix = pos - buf;
+                snprintf(outputs[count], 256, "%.*s%s%s",
+                         (int)prefix,
+                         buf,
+                         replacements[i].alt,
+                         pos + strlen(replacements[i].word));
+                ++count;
+            }
+        }
+    }
+
+    if (count == 0 && max_outputs > 0) {
+        strncpy(outputs[0], input, 255);
+        outputs[0][255] = '\0';
+    }
 }
