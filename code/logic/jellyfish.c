@@ -589,11 +589,11 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain_t *chain) {
     }
 
     printf("== Jellyfish Chain Dump ==\n");
-    printf("Total blocks: %zu\n", chain->count);
+    printf("Total blocks: %llu\n", (unsigned long long)chain->count);
 
     for (size_t i = 0; i < chain->count; ++i) {
         const fossil_jellyfish_block_t *b = &chain->memory[i];
-        printf("Block %zu:\n", i);
+        printf("Block %llu:\n", (unsigned long long)i);
 
         printf("  Type         : %s (%d)\n",
             (b->block_type >= 0 && b->block_type <= 10) ? block_type_names[b->block_type] : "INVALID",
@@ -601,8 +601,8 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain_t *chain) {
 
         printf("  Input        : %s\n", b->io.input);
         printf("  Output       : %s\n", b->io.output);
-        printf("  Input Len    : %zu\n", b->io.input_len);
-        printf("  Output Len   : %zu\n", b->io.output_len);
+        printf("  Input Len    : %llu\n", (unsigned long long)b->io.input_len);
+        printf("  Output Len   : %llu\n", (unsigned long long)b->io.output_len);
         printf("  Timestamp    : %" PRIu64 "\n", b->time.timestamp);
         printf("  Delta ms     : %u\n", b->time.delta_ms);
         printf("  Duration ms  : %u\n", b->time.duration_ms);
@@ -659,7 +659,7 @@ void fossil_jellyfish_dump(const fossil_jellyfish_chain_t *chain) {
         // Print tags if present
         for (size_t t = 0; t < FOSSIL_JELLYFISH_MAX_TAGS; ++t) {
             if (b->classify.tags[t][0]) {
-                printf("    Tag[%zu]          : %s\n", t, b->classify.tags[t]);
+                printf("    Tag[%llu]          : %s\n", (unsigned long long)t, b->classify.tags[t]);
             }
         }
 
@@ -1005,7 +1005,7 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain_t *chain) {
         float best_conf = -1.0f;
         for (size_t i = 0; i < chain->count; ++i) {
             const fossil_jellyfish_block_t *b = &chain->memory[i];
-            if (!b->attributes.valid || b->block_type != t) continue;
+            if (!b->attributes.valid || (int)b->block_type != t) continue;
             if (b->attributes.confidence > best_conf) {
                 best = b;
                 best_conf = b->attributes.confidence;
@@ -1045,7 +1045,7 @@ void fossil_jellyfish_reflect(const fossil_jellyfish_chain_t *chain) {
             printf("    Contradicted        : %d\n", best->classify.is_contradicted);
             for (size_t tag = 0; tag < FOSSIL_JELLYFISH_MAX_TAGS; ++tag) {
                 if (best->classify.tags[tag][0]) {
-                    printf("    Tag[%zu]             : %s\n", tag, best->classify.tags[tag]);
+                    printf("    Tag[%llu]             : %s\n", (unsigned long long)tag, best->classify.tags[tag]);
                 }
             }
         } else {
@@ -1360,21 +1360,21 @@ int fossil_jellyfish_redact_block(fossil_jellyfish_block_t *block) {
     return 0;
 }
 
-void fossil_jellyfish_chain_stats(const fossil_jellyfish_chain_t *chain, size_t out_valid_count[11], float out_avg_confidence[11], float out_immutable_ratio[11]) {
+void fossil_jellyfish_chain_stats(const fossil_jellyfish_chain_t *chain, size_t out_valid_count[5], float out_avg_confidence[5], float out_immutable_ratio[5]) {
     if (!chain) return;
-    size_t valid[11] = {0}, immutable[11] = {0};
-    float confidence_sum[11] = {0};
+    size_t valid[5] = {0}, immutable[5] = {0};
+    float confidence_sum[5] = {0};
 
     for (size_t i = 0; i < chain->count; ++i) {
         const fossil_jellyfish_block_t *b = &chain->memory[i];
-        int t = (b->block_type >= 0 && b->block_type <= 10) ? b->block_type : 0;
+        int t = (b->block_type >= 0 && b->block_type <= 4) ? b->block_type : 0;
         if (!b->attributes.valid) continue;
         valid[t]++;
         confidence_sum[t] += b->attributes.confidence;
         if (b->attributes.immutable) immutable[t]++;
     }
 
-    for (int t = 0; t < 11; ++t) {
+    for (int t = 0; t < 5; ++t) {
         if (out_valid_count) out_valid_count[t] = valid[t];
         if (out_avg_confidence) out_avg_confidence[t] = valid[t] ? (confidence_sum[t] / valid[t]) : 0.0f;
         if (out_immutable_ratio) out_immutable_ratio[t] = valid[t] ? ((float)immutable[t] / valid[t]) : 0.0f;
@@ -1390,9 +1390,9 @@ int fossil_jellyfish_compare_chains(const fossil_jellyfish_chain_t *a, const fos
         size_t ai = 0, bi = 0, ac = 0, bc = 0;
         while (ac < a->count || bc < b->count) {
             // Find next valid block of this type in a
-            while (ai < a->count && (a->memory[ai].block_type != t || !a->memory[ai].attributes.valid)) ai++;
+            while (ai < a->count && ((int)a->memory[ai].block_type != t || !a->memory[ai].attributes.valid)) ai++;
             // Find next valid block of this type in b
-            while (bi < b->count && (b->memory[bi].block_type != t || !b->memory[bi].attributes.valid)) bi++;
+            while (bi < b->count && ((int)b->memory[bi].block_type != t || !b->memory[bi].attributes.valid)) bi++;
 
             const fossil_jellyfish_block_t *ba = (ai < a->count) ? &a->memory[ai] : NULL;
             const fossil_jellyfish_block_t *bb = (bi < b->count) ? &b->memory[bi] : NULL;
@@ -1473,7 +1473,7 @@ int fossil_jellyfish_trim(fossil_jellyfish_chain_t *chain, size_t max_blocks) {
         size_t idx[FOSSIL_JELLYFISH_MAX_MEM];
         size_t n = 0;
         for (size_t i = 0; i < chain->count; ++i) {
-            if (chain->memory[i].attributes.valid && chain->memory[i].block_type == t)
+            if (chain->memory[i].attributes.valid && (int)chain->memory[i].block_type == t)
                 idx[n++] = i;
         }
         // Sort indices by confidence descending
@@ -1517,7 +1517,7 @@ int fossil_jellyfish_chain_compact(fossil_jellyfish_chain_t *chain) {
     // Count valid blocks of each type (all 11 types)
     for (int t = JELLY_BLOCK_UNKNOWN; t <= JELLY_BLOCK_ARCHIVED; ++t) {
         for (size_t i = 0; i < chain->count; ++i) {
-            if (chain->memory[i].attributes.valid && chain->memory[i].block_type == t) {
+            if (chain->memory[i].attributes.valid && (int)chain->memory[i].block_type == t) {
                 ++new_index[t];
             }
         }
@@ -1655,7 +1655,7 @@ int fossil_jellyfish_clone_chain(const fossil_jellyfish_chain_t *src, fossil_jel
     for (int t = JELLY_BLOCK_UNKNOWN; t <= JELLY_BLOCK_ARCHIVED; ++t) {
         for (size_t i = 0; i < src->count; ++i) {
             const fossil_jellyfish_block_t *block = &src->memory[i];
-            if (block->block_type == t && block->attributes.valid) {
+            if ((int)block->block_type == t && block->attributes.valid) {
                 if (dst_idx < FOSSIL_JELLYFISH_MAX_MEM) {
                     dst->memory[dst_idx++] = *block;
                 }
