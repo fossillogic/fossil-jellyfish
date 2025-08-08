@@ -1234,17 +1234,18 @@ int fossil_jellyfish_deduplicate_chain(fossil_jellyfish_chain_t *chain) {
 
     // For each block type, deduplicate only within that type
     for (int t = JELLY_BLOCK_UNKNOWN; t <= JELLY_BLOCK_ARCHIVED; ++t) {
+        fossil_jellyfish_block_type_t block_type = (fossil_jellyfish_block_type_t)t;
+    
         for (size_t i = 0; i < chain->count; ++i) {
             fossil_jellyfish_block_t *a = &chain->memory[i];
-            if (a->block_type != t || !a->attributes.valid) continue;
-
+            if (a->block_type != block_type || !a->attributes.valid) continue;
+    
             for (size_t j = i + 1; j < chain->count; ) {
                 fossil_jellyfish_block_t *b = &chain->memory[j];
-                if (b->block_type == t &&
+                if (b->block_type == block_type &&
                     b->attributes.valid &&
                     strcmp(a->io.input, b->io.input) == 0 &&
                     strcmp(a->io.output, b->io.output) == 0) {
-                    // Remove duplicate b
                     memmove(&chain->memory[j], &chain->memory[j + 1], sizeof(fossil_jellyfish_block_t) * (chain->count - j - 1));
                     chain->count--;
                     removed++;
@@ -1279,16 +1280,18 @@ int fossil_jellyfish_compress_chain(fossil_jellyfish_chain_t *chain) {
 
     // For each block type (all 11 types)
     for (int t = JELLY_BLOCK_UNKNOWN; t <= JELLY_BLOCK_ARCHIVED; ++t) {
+        fossil_jellyfish_block_type_t block_type = (fossil_jellyfish_block_type_t)t;
+    
         for (size_t i = 0; i < chain->count; ++i) {
             fossil_jellyfish_block_t *block = &chain->memory[i];
-            if (block->block_type != t) continue;
-
+            if (block->block_type != block_type) continue;
+    
             size_t orig_input_len = strlen(block->io.input);
             size_t orig_output_len = strlen(block->io.output);
-
+    
             trim_whitespace(block->io.input);
             trim_whitespace(block->io.output);
-
+    
             if (strlen(block->io.input) != orig_input_len || strlen(block->io.output) != orig_output_len) {
                 modified++;
             }
