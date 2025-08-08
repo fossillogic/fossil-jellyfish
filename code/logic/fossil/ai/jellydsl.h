@@ -97,6 +97,35 @@ typedef struct {
     uint64_t timestamp;
 } fossil_jellydsl_signature;
 
+// Meson-style JellyDSL parser for .jellyfish "mindset" blocks
+
+// --- Tokenizer/Lexer ---
+
+typedef enum {
+    TOK_EOF,
+    TOK_IDENTIFIER,
+    TOK_STRING,
+    TOK_NUMBER,
+    TOK_BOOLEAN,
+    TOK_LPAREN,   // (
+    TOK_RPAREN,   // )
+    TOK_LBRACKET, // [
+    TOK_RBRACKET, // ]
+    TOK_COMMA,    // ,
+    TOK_COLON     // :
+} jellydsl_token_type;
+
+typedef struct {
+    jellydsl_token_type type;
+    char text[128];
+} jellydsl_token;
+
+typedef struct {
+    const char *src;
+    size_t pos;
+    size_t len;
+} jellydsl_lexer;
+
 // *****************************************************************************
 // Function Prototypes (modular loaders/savers follow)
 // *****************************************************************************
