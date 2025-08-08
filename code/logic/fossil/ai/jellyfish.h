@@ -41,6 +41,7 @@ enum {
 
 #define FOSSIL_DEVICE_ID_SIZE      16   // E.g., 128-bit hardware ID
 #define FOSSIL_SIGNATURE_SIZE      64   // ECDSA, ED25519, etc.
+#define FOSSIL_JELLYFISH_MAX_LINKS 4
 
 #ifdef __cplusplus
 extern "C"
@@ -118,13 +119,27 @@ typedef struct {
  * Block Classification / Reasoning Info
  */
 typedef struct {
-    uint32_t derived_from_index;                // Optional: index of source block
-    char classification_reason[128];            // Optional: short explanation ("based on extrapolated topic", etc.)
-    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];   // Optional: tags or labels for classification
-    float similarity_score;                     // Similarity to source or related block (0.0 - 1.0)
-    int is_hallucinated;                        // 1 if block is hallucinated/imagined, 0 otherwise
-    int is_contradicted;                        // 1 if block is contradicted by another, 0 otherwise
-    int reserved;                               // Reserved for future use (set to 0)
+    // Primary logical origin (legacy, main derivation)
+    uint32_t derived_from_index;
+
+    // Multiple cross-references to other blocks (multi-hop graph edges)
+    uint32_t cross_refs[FOSSIL_JELLYFISH_MAX_LINKS];
+    size_t cross_ref_count;
+
+    // Forward references (blocks that derive from this one)
+    uint32_t forward_refs[FOSSIL_JELLYFISH_MAX_LINKS];
+    size_t forward_ref_count;
+
+    // Optional reasoning metadata
+    uint16_t reasoning_depth;      // How far from original observation this block is
+    uint16_t reserved;
+
+    char classification_reason[128];
+    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];
+    float similarity_score;
+    int is_hallucinated;
+    int is_contradicted;
+    int reserved;
 } fossil_jellyfish_block_classification_t;
 
 /**
