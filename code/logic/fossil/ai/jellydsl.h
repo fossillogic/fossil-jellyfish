@@ -173,7 +173,7 @@ int fossil_jellydsl_save_chain(const char *filepath, const fossil_jellyfish_chai
  * @param out Pointer to output idea structure.
  * @return 0 on success, nonzero on failure.
  */
-int fossil_jellydsl_load_idea(const char *filepath, fossil_jellydsl_idea *out);
+int fossil_jellydsl_save_idea(const char *filepath, const fossil_jellydsl_idea *idea);
 
 /**
  * @brief Save an imagination idea to a file (.jfidea).
@@ -181,7 +181,7 @@ int fossil_jellydsl_load_idea(const char *filepath, fossil_jellydsl_idea *out);
  * @param idea Pointer to the idea structure.
  * @return 0 on success, nonzero on failure.
  */
-int fossil_jellydsl_save_idea(const char *filepath, const fossil_jellydsl_idea *idea);
+int fossil_jellydsl_load_idea(const char *filepath, fossil_jellydsl_idea *out);
 
 /**
  * @brief Load metadata from a file (.jfmeta).
@@ -213,7 +213,7 @@ int fossil_jellydsl_load_signature(const char *filepath, fossil_jellydsl_signatu
  * @param sig Pointer to the signature structure.
  * @return 0 on success, nonzero on failure.
  */
-int fossil_jellydsl_save_signature(const char *filepath, const fossil_jellydsl_signature *sig);
+int fossil_jellydsl_load_signature(const char *filepath, fossil_jellydsl_signature *out);
 
 /**
  * @brief Check if a path ends with a given extension.
