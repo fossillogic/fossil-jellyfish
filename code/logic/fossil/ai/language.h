@@ -16,6 +16,16 @@
 
 #include "jellyfish.h"
 
+#define FOSSIL_LANG_PIPELINE_OUTPUT_SIZE 1024
+
+#ifndef FOSSIL_JELLYFISH_TOKEN_SIZE
+#define FOSSIL_JELLYFISH_TOKEN_SIZE 32
+#endif
+
+#ifndef FOSSIL_JELLYFISH_MAX_TOKENS
+#define FOSSIL_JELLYFISH_MAX_TOKENS 64
+#endif
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -38,7 +48,7 @@ typedef struct {
     char focus[64];
     char summary[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE];
     char normalized[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE];
-    char tokens[64][32]; // optional: store tokens
+    char tokens[64][FOSSIL_JELLYFISH_TOKEN_SIZE];
     size_t token_count;
 } fossil_lang_result_t;
 
