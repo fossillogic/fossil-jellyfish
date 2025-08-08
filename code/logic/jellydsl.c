@@ -184,20 +184,21 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
 
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
+    if (sz < 0) { fclose(f); return -1; }
+
     fseek(f, 0, SEEK_SET);
     char *buf = malloc(sz + 1);
     if (!buf) { fclose(f); return -1; }
 
     fread(buf, 1, sz, f);
-    buf[sz] = 0;
+    buf[sz] = '\0';
     fclose(f);
-
-    memset(out, 0, sizeof(*out));
 
     jellydsl_lexer lx;
     jellydsl_lexer_init(&lx, buf);
+    memset(out, 0, sizeof(*out));
 
-    // Skip leading comments and whitespace
+    // Skip comments
     while (1) {
         jellydsl_lexer_skipws(&lx);
         if (lx.src[lx.pos] == '#') {
@@ -207,15 +208,23 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
         }
     }
 
-    // Expect: mindset(...)
     jellydsl_token tok = jellydsl_lexer_next_token(&lx);
-    if (tok.type != TOK_IDENTIFIER || strcmp(tok.text, "mindset") != 0) { free(buf); return -1; }
+    if (tok.type != TOK_IDENTIFIER || strcmp(tok.text, "mindset") != 0) {
+        free(buf);
+        return -1;
+    }
 
-    if (jellydsl_lexer_next_token(&lx).type != TOK_LPAREN) { free(buf); return -1; }
-
-    // Parse mindset name
     tok = jellydsl_lexer_next_token(&lx);
-    if (tok.type != TOK_STRING && tok.type != TOK_IDENTIFIER) { free(buf); return -1; }
+    if (tok.type != TOK_LPAREN) {
+        free(buf);
+        return -1;
+    }
+
+    tok = jellydsl_lexer_next_token(&lx);
+    if (tok.type != TOK_STRING && tok.type != TOK_IDENTIFIER) {
+        free(buf);
+        return -1;
+    }
     strncpy(out->name, tok.text, sizeof(out->name) - 1);
 
     tok = jellydsl_lexer_next_token(&lx);
@@ -225,65 +234,50 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
 
     // Parse key: value pairs
     while (tok.type != TOK_RPAREN && tok.type != TOK_EOF) {
-        // Skip inline comments
-        while (tok.type == TOK_IDENTIFIER && tok.text[0] == '#') {
-            while (lx.pos < lx.len && lx.src[lx.pos] != '\n') lx.pos++;
-            tok = jellydsl_lexer_next_token(&lx);
+        if (tok.type != TOK_IDENTIFIER) {
+            free(buf);
+            return -1;
         }
 
-        if (tok.type != TOK_IDENTIFIER) { free(buf); return -1; }
+        char key[64];
+        strncpy(key, tok.text, sizeof(key) - 1);
 
-        char key[64]; strncpy(key, tok.text, sizeof(key) - 1);
-        if (jellydsl_lexer_next_token(&lx).type != TOK_COLON) { free(buf); return -1; }
+        if (jellydsl_lexer_next_token(&lx).type != TOK_COLON) {
+            free(buf);
+            return -1;
+        }
 
         tok = jellydsl_lexer_next_token(&lx);
 
-        if (strcmp(key, "description") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
+        if ((strcmp(key, "description") == 0) && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
             strncpy(out->description, tok.text, sizeof(out->description) - 1);
-        } else if (strcmp(key, "priority") == 0 && tok.type == TOK_NUMBER) {
+        } else if ((strcmp(key, "priority") == 0) && tok.type == TOK_NUMBER) {
             out->priority = atoi(tok.text);
-        } else if (strcmp(key, "confidence_threshold") == 0 && tok.type == TOK_NUMBER) {
+        } else if ((strcmp(key, "confidence_threshold") == 0) && tok.type == TOK_NUMBER) {
             out->confidence_threshold = atof(tok.text);
-        } else if (strcmp(key, "immutable") == 0 && tok.type == TOK_BOOLEAN) {
-            out->immutable = (strcmp(tok.text, "true") == 0);
-        } else if (strcmp(key, "activation_condition") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
-            strncpy(out->activation_condition, tok.text, sizeof(out->activation_condition) - 1);
-        } else if (strcmp(key, "version") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
-            strncpy(out->version, tok.text, sizeof(out->version) - 1);
-        } else if (strcmp(key, "source_uri") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
-            strncpy(out->source_uri, tok.text, sizeof(out->source_uri) - 1);
-        } else if (strcmp(key, "origin_device_id") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
-            strncpy(out->origin_device_id, tok.text, sizeof(out->origin_device_id) - 1);
-        } else if (strcmp(key, "content_hash") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
-            strncpy(out->content_hash, tok.text, sizeof(out->content_hash) - 1);
-        } else if (strcmp(key, "created_at") == 0 && tok.type == TOK_NUMBER) {
-            out->created_at = strtoull(tok.text, NULL, 10);
-        } else if (strcmp(key, "updated_at") == 0 && tok.type == TOK_NUMBER) {
-            out->updated_at = strtoull(tok.text, NULL, 10);
-        } else if (strcmp(key, "trust_score") == 0 && tok.type == TOK_NUMBER) {
-            out->trust_score = atof(tok.text);
-        } else if (strcmp(key, "state_machine") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
-            strncpy(out->state_machine, tok.text, sizeof(out->state_machine) - 1);
-        } else if (strcmp(key, "tags") == 0 && tok.type == TOK_LBRACKET) {
-            lx.pos--; // rewind to let parser see '['
-            int count = 0;
-            if (jellydsl_parse_list(&lx, out->tags, FOSSIL_JELLYFISH_MAX_TAGS, &count) != 0) { free(buf); return -1; }
-            out->tag_count = (size_t)count;
-        } else if (strcmp(key, "models") == 0 && tok.type == TOK_LBRACKET) {
-            lx.pos--; // rewind to let parser see '['
-            int count = 0;
-            if (jellydsl_parse_list(&lx, out->models, FOSSIL_JELLYFISH_MAX_MODELS, &count) != 0) { free(buf); return -1; }
-            out->model_count = (size_t)count;
+        } else if ((strcmp(key, "tags") == 0) && tok.type == TOK_LBRACKET) {
+            int tag_index = 0;
+            while (tag_index < FOSSIL_JELLYDSL_MAX_TAGS) {
+                tok = jellydsl_lexer_next_token(&lx);
+                if (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER) {
+                    strncpy(out->tags[tag_index++], tok.text, FOSSIL_JELLYDSL_MAX_TAG_LEN - 1);
+                } else if (tok.type == TOK_RBRACKET) {
+                    break;
+                } else {
+                    break;
+                }
+
+                tok = jellydsl_lexer_next_token(&lx);
+                if (tok.type != TOK_COMMA && tok.type != TOK_RBRACKET) break;
+                if (tok.type == TOK_RBRACKET) break;
+            }
         }
 
-        // Advance to next
+        // Read the next comma or closing paren
         tok = jellydsl_lexer_next_token(&lx);
-        while (tok.type == TOK_IDENTIFIER && tok.text[0] == '#') {
-            while (lx.pos < lx.len && lx.src[lx.pos] != '\n') lx.pos++;
+        if (tok.type == TOK_COMMA) {
             tok = jellydsl_lexer_next_token(&lx);
         }
-
-        if (tok.type == TOK_COMMA) tok = jellydsl_lexer_next_token(&lx);
     }
 
     free(buf);
