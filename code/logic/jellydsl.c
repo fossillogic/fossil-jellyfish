@@ -130,23 +130,18 @@ static jellydsl_token jellydsl_lexer_next_token(jellydsl_lexer *lx) {
 // --- Parser ---
 
 static int jellydsl_parse_list(jellydsl_lexer *lx, char arr[][32], int max, size_t *out_count) {
-    *out_count = 0;
-    jellydsl_token tok = jellydsl_lexer_next_token(lx);
-    if (tok.type != TOK_LBRACKET) return -1;
-    while (1) {
-        tok = jellydsl_lexer_next_token(lx);
-        if (tok.type == TOK_RBRACKET) break;
-        if (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER) {
-            if (*out_count < max) {
-                strncpy(arr[*out_count], tok.text, 31);
-                arr[*out_count][31] = 0;
-                (*out_count)++;
-            }
-        }
-        tok = jellydsl_lexer_next_token(lx);
-        if (tok.type == TOK_RBRACKET) break;
-        if (tok.type != TOK_COMMA) return -1;
+    int count = 0;
+    if (jellydsl_expect(lx, '[') != 0) return -1;
+    while (lx->token && count < max) {
+        strncpy(arr[count], lx->token, 31);
+        arr[count][31] = '\0';
+        count++;
+        jellydsl_next(lx);
+        if (lx->token[0] == ',') jellydsl_next(lx);
+        else break;
     }
+    if (jellydsl_expect(lx, ']') != 0) return -1;
+    *out_count = (size_t)count;
     return 0;
 }
 
@@ -183,24 +178,26 @@ static char *trim(char *str) {
 
 int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *out) {
     if (!filepath || !out) return -1;
+
     FILE *f = fopen(filepath, "r");
     if (!f) return -1;
 
-    // Read file into buffer
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
     char *buf = malloc(sz + 1);
     if (!buf) { fclose(f); return -1; }
+
     fread(buf, 1, sz, f);
     buf[sz] = 0;
     fclose(f);
 
     memset(out, 0, sizeof(*out));
+
     jellydsl_lexer lx;
     jellydsl_lexer_init(&lx, buf);
 
-    // --- Skip comments at the start ---
+    // Skip leading comments and whitespace
     while (1) {
         jellydsl_lexer_skipws(&lx);
         if (lx.src[lx.pos] == '#') {
@@ -210,26 +207,35 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
         }
     }
 
+    // Expect: mindset(...)
     jellydsl_token tok = jellydsl_lexer_next_token(&lx);
     if (tok.type != TOK_IDENTIFIER || strcmp(tok.text, "mindset") != 0) { free(buf); return -1; }
+
     if (jellydsl_lexer_next_token(&lx).type != TOK_LPAREN) { free(buf); return -1; }
 
-    // Parse: mindset('name', key: value, ...)
+    // Parse mindset name
     tok = jellydsl_lexer_next_token(&lx);
-    if (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER) {
-        strncpy(out->name, tok.text, sizeof(out->name) - 1);
-        tok = jellydsl_lexer_next_token(&lx);
-        if (tok.type == TOK_COMMA) tok = jellydsl_lexer_next_token(&lx);
-    } else { free(buf); return -1; }
+    if (tok.type != TOK_STRING && tok.type != TOK_IDENTIFIER) { free(buf); return -1; }
+    strncpy(out->name, tok.text, sizeof(out->name) - 1);
 
+    tok = jellydsl_lexer_next_token(&lx);
+    if (tok.type == TOK_COMMA) {
+        tok = jellydsl_lexer_next_token(&lx);
+    }
+
+    // Parse key: value pairs
     while (tok.type != TOK_RPAREN && tok.type != TOK_EOF) {
+        // Skip inline comments
         while (tok.type == TOK_IDENTIFIER && tok.text[0] == '#') {
             while (lx.pos < lx.len && lx.src[lx.pos] != '\n') lx.pos++;
             tok = jellydsl_lexer_next_token(&lx);
         }
+
         if (tok.type != TOK_IDENTIFIER) { free(buf); return -1; }
-        char key[64]; strncpy(key, tok.text, 63); key[63] = 0;
+
+        char key[64]; strncpy(key, tok.text, sizeof(key) - 1);
         if (jellydsl_lexer_next_token(&lx).type != TOK_COLON) { free(buf); return -1; }
+
         tok = jellydsl_lexer_next_token(&lx);
 
         if (strcmp(key, "description") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
@@ -239,7 +245,7 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
         } else if (strcmp(key, "confidence_threshold") == 0 && tok.type == TOK_NUMBER) {
             out->confidence_threshold = atof(tok.text);
         } else if (strcmp(key, "immutable") == 0 && tok.type == TOK_BOOLEAN) {
-            out->immutable = (strcmp(tok.text, "true") == 0) ? 1 : 0;
+            out->immutable = (strcmp(tok.text, "true") == 0);
         } else if (strcmp(key, "activation_condition") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
             strncpy(out->activation_condition, tok.text, sizeof(out->activation_condition) - 1);
         } else if (strcmp(key, "version") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
@@ -259,22 +265,24 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
         } else if (strcmp(key, "state_machine") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
             strncpy(out->state_machine, tok.text, sizeof(out->state_machine) - 1);
         } else if (strcmp(key, "tags") == 0 && tok.type == TOK_LBRACKET) {
-            lx.pos--;
-            int tag_count = 0;
-            if (jellydsl_parse_list(&lx, out->tags, FOSSIL_JELLYFISH_MAX_TAGS, &tag_count) != 0) { free(buf); return -1; }
-            out->tag_count = (size_t)tag_count;
+            lx.pos--; // rewind to let parser see '['
+            int count = 0;
+            if (jellydsl_parse_list(&lx, out->tags, FOSSIL_JELLYFISH_MAX_TAGS, &count) != 0) { free(buf); return -1; }
+            out->tag_count = (size_t)count;
         } else if (strcmp(key, "models") == 0 && tok.type == TOK_LBRACKET) {
-            lx.pos--;
-            int model_count = 0;
-            if (jellydsl_parse_list(&lx, out->models, FOSSIL_JELLYFISH_MAX_MODELS, &model_count) != 0) { free(buf); return -1; }
-            out->model_count = (size_t)model_count;
+            lx.pos--; // rewind to let parser see '['
+            int count = 0;
+            if (jellydsl_parse_list(&lx, out->models, FOSSIL_JELLYFISH_MAX_MODELS, &count) != 0) { free(buf); return -1; }
+            out->model_count = (size_t)count;
         }
 
+        // Advance to next
         tok = jellydsl_lexer_next_token(&lx);
         while (tok.type == TOK_IDENTIFIER && tok.text[0] == '#') {
             while (lx.pos < lx.len && lx.src[lx.pos] != '\n') lx.pos++;
             tok = jellydsl_lexer_next_token(&lx);
         }
+
         if (tok.type == TOK_COMMA) tok = jellydsl_lexer_next_token(&lx);
     }
 
@@ -292,14 +300,14 @@ int fossil_jellydsl_save_model(const char *filepath, const fossil_jellyfish_jell
     fprintf(f, "  description: '%s',\n", model->description);
 
     fprintf(f, "  tags: [");
-    for (size_t i = 0; i < model->tag_count; i++) {
-        fprintf(f, "'%s'%s", model->tags[i], (i < model->tag_count - 1) ? ", " : "");
+    for (size_t i = 0; i < model->tag_count; ++i) {
+        fprintf(f, "'%s'%s", model->tags[i], (i + 1 < model->tag_count) ? ", " : "");
     }
     fprintf(f, "],\n");
 
     fprintf(f, "  models: [");
-    for (size_t i = 0; i < model->model_count; i++) {
-        fprintf(f, "'%s'%s", model->models[i], (i < model->model_count - 1) ? ", " : "");
+    for (size_t i = 0; i < model->model_count; ++i) {
+        fprintf(f, "'%s'%s", model->models[i], (i + 1 < model->model_count) ? ", " : "");
     }
     fprintf(f, "],\n");
 
@@ -314,9 +322,9 @@ int fossil_jellydsl_save_model(const char *filepath, const fossil_jellyfish_jell
     fprintf(f, "  created_at: %llu,\n", (unsigned long long)model->created_at);
     fprintf(f, "  updated_at: %llu,\n", (unsigned long long)model->updated_at);
     fprintf(f, "  trust_score: %.4f,\n", model->trust_score);
-    fprintf(f, "  state_machine: '%s'", model->state_machine);
+    fprintf(f, "  state_machine: '%s'\n", model->state_machine);
 
-    fprintf(f, "\n)\n");
+    fprintf(f, ")\n");
 
     fclose(f);
     return 0;
