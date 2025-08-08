@@ -130,7 +130,7 @@ typedef struct {
     uint32_t forward_refs[FOSSIL_JELLYFISH_MAX_LINKS];
     size_t forward_ref_count;
 
-    // Optional reasoning metadata
+    // reasoning metadata
     uint16_t reasoning_depth;      // How far from original observation this block is
     uint16_t reserved;
 
@@ -139,7 +139,6 @@ typedef struct {
     float similarity_score;
     int is_hallucinated;
     int is_contradicted;
-    int reserved;
 } fossil_jellyfish_block_classification_t;
 
 /**
