@@ -721,16 +721,6 @@ namespace ai {
         }
 
         /**
-         * @brief Prunes the chain by removing invalid or low-confidence blocks.
-         * 
-         * @param min_confidence Minimum confidence threshold for blocks to retain.
-         * @return Number of blocks pruned.
-         */
-        int prune_chain(float min_confidence) {
-            return fossil_jellyfish_prune_chain(&chain_, min_confidence);
-        }
-
-        /**
          * @brief Deduplicates blocks with identical input/output pairs.
          * 
          * @return Number of duplicates removed.
