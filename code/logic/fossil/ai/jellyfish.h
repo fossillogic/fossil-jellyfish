@@ -51,57 +51,121 @@ extern "C"
 // Type definitions
 // *****************************************************************************
 
+/**
+ * @brief Enumerates the types of memory blocks in Truthful Intelligence.
+ *
+ * These types help categorize the origin, validation, and purpose of a block.
+ */
 typedef enum {
-    JELLY_BLOCK_BASIC = 0,
-    JELLY_BLOCK_IMAGINED = 1,
-    JELLY_BLOCK_DERIVED = 2,
-    JELLY_BLOCK_EXPERIMENTAL = 3,
-    JELLY_BLOCK_VERIFIED = 4
-} fossil_jellyfish_block_type;
+    JELLY_BLOCK_UNKNOWN = 0,           // Default/unclassified block
+    JELLY_BLOCK_OBSERVED = 1,          // Raw input/output from real-world interaction
+    JELLY_BLOCK_INFERRED = 2,          // Derived from reasoning or extrapolated logic
+    JELLY_BLOCK_VALIDATED = 3,         // Confirmed by external source (e.g., consensus or signature)
+    JELLY_BLOCK_CORRECTED = 4,         // Modified by user or verifier to fix prior output
+    JELLY_BLOCK_ASSUMED = 5,           // Presumed true due to lack of contradiction (but not verified)
+    JELLY_BLOCK_RETRACTED = 6,         // Marked as invalid or superseded (soft deletion)
+    JELLY_BLOCK_EXPERIMENTAL = 7,      // From test/hypothesis, not to be trusted by default
+    JELLY_BLOCK_GUIDED = 8,            // User-directed insertion (manual memory, prompts, etc.)
+    JELLY_BLOCK_IMMUTABLE = 9,         // Permanent/trusted system-level assertion
+    JELLY_BLOCK_ARCHIVED = 10          // Frozen due to age, stability, or inactivity
+} fossil_jellyfish_block_type_t;
 
 /**
- * @brief Represents a single memory block in the Jellyfish AI chain.
- *
- * Each block stores a learned input-output pair, metadata about usage,
- * cryptographic fingerprinting, and timing. The `immutable` flag ensures
- * the block is protected from decay, pruning, or accidental overwrites.
- *
- * Indicates whether this block is imagined (not from real interaction),
- * and optionally links to a "source" block or reasoning trail.
+ * Block Attributes - Flags or enumerations for block attributes
  */
 typedef struct {
-    char input[FOSSIL_JELLYFISH_INPUT_SIZE];
-    char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];
-    uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];
-    uint64_t timestamp;
-    uint32_t delta_ms;
-    uint32_t duration_ms;
-    int valid;
-    float confidence;
-    uint32_t usage_count;
+    int immutable;            // 1 = block is immutable, 0 = mutable
+    int valid;                // 1 = block data is valid, 0 = invalid or corrupted
+    float confidence;         // Confidence score for block's content
+    uint32_t usage_count;     // Number of times this block was referenced/used
+    int pruned;               // 1 = block has been pruned/marked for removal, 0 = active
+    int redacted;             // 1 = block has been redacted, 0 = original
+    int deduplicated;         // 1 = block is a deduplicated copy, 0 = unique/original
+    int compressed;           // 1 = block has been compressed, 0 = uncompressed
+    int expired;              // 1 = block is expired, 0 = valid
+    int trusted;              // 1 = block is trusted (e.g., signature verified), 0 = untrusted
+    int conflicted;           // 1 = block is in conflict with another, 0 = no conflict
+    int reserved;             // Reserved for future use (set to 0)
+} fossil_jellyfish_block_attributes_t;
 
-    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];
-    uint8_t signature[FOSSIL_SIGNATURE_SIZE];
-    int immutable;
-    int block_type;
+/**
+ * Block Timing Information
+ */
+typedef struct {
+    uint64_t timestamp;       // Epoch time when block was created/learned
+    uint32_t delta_ms;        // Time delta since previous block (ms)
+    uint32_t duration_ms;     // Duration of processing/input (ms)
+    uint64_t updated_at;      // Last modification timestamp (epoch ms)
+    uint64_t expires_at;      // Expiry timestamp (epoch ms), 0 if not set
+    uint64_t validated_at;    // When block was last validated (epoch ms), 0 if never
+} fossil_jellyfish_block_time_t;
 
-    // Imagination-related fields:
-    int imagined;                             // New: 1 = imagined, 0 = real
-    uint32_t imagined_from_index;             // Optional: index of source block
-    char imagination_reason[128];             // Optional: short explanation ("extrapolated from similar pattern", etc.)
+/**
+ * Block Identification and Security
+ */
+typedef struct {
+    uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE];         // Cryptographic fingerprint of block
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];         // Device where block was created
+    uint8_t signature[FOSSIL_SIGNATURE_SIZE];         // Digital signature for integrity/authentication
+    uint32_t block_index;                             // Index of this block in the chain
+    uint32_t prev_block_index;                        // Index of previous block (for linking/history)
+    uint8_t prev_hash[FOSSIL_JELLYFISH_HASH_SIZE];    // Hash of previous block (for chain integrity)
+    uint32_t signature_len;                           // Actual length of signature (if variable)
+    uint32_t reserved;                                // Reserved for future use (set to 0)
+} fossil_jellyfish_block_identity_t;
+
+/**
+ * Block Classification / Reasoning Info
+ */
+typedef struct {
+    uint32_t derived_from_index;                // Optional: index of source block
+    char classification_reason[128];            // Optional: short explanation ("based on extrapolated topic", etc.)
+    char tags[FOSSIL_JELLYFISH_MAX_TAGS][32];   // Optional: tags or labels for classification
+    float similarity_score;                     // Similarity to source or related block (0.0 - 1.0)
+    int is_hallucinated;                        // 1 if block is hallucinated/imagined, 0 otherwise
+    int is_contradicted;                        // 1 if block is contradicted by another, 0 otherwise
+    int reserved;                               // Reserved for future use (set to 0)
+} fossil_jellyfish_block_classification_t;
+
+/**
+ * Core Input/Output Data
+ */
+typedef struct {
+    char input[FOSSIL_JELLYFISH_INPUT_SIZE];      // Input string (question, prompt, etc.)
+    char output[FOSSIL_JELLYFISH_OUTPUT_SIZE];    // Output string (answer, response, etc.)
+    size_t input_len;                             // Actual length of input (excluding null terminator)
+    size_t output_len;                            // Actual length of output (excluding null terminator)
+    char input_tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];   // Tokenized input
+    size_t input_token_count;                     // Number of input tokens
+    char output_tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];  // Tokenized output
+    size_t output_token_count;                    // Number of output tokens
+    int compressed;                               // 1 if input/output is compressed, 0 otherwise
+    int redacted;                                 // 1 if input/output is redacted, 0 otherwise
+    int reserved;                                 // Reserved for future use (set to 0)
+} fossil_jellyfish_block_io_t;
+
+/**
+ * Complete Jellyfish Memory Block
+ */
+typedef struct {
+    fossil_jellyfish_block_io_t io;                       // Input/output pair
+    fossil_jellyfish_block_identity_t identity;           // Hash, device, signature
+    fossil_jellyfish_block_time_t time;                   // Timing metadata
+    fossil_jellyfish_block_attributes_t attributes;       // Flags and confidence
+    fossil_jellyfish_block_type_t block_type;             // Type enum
+    fossil_jellyfish_block_classification_t classify;     // Classification info (instead of imagination)
 } fossil_jellyfish_block_t;
 
 /**
  * Represents a chain of jellyfish blocks.
- * This structure holds the memory for the jellyfish AI and tracks the number of blocks.
  */
 typedef struct {
     fossil_jellyfish_block_t memory[FOSSIL_JELLYFISH_MAX_MEM];
     size_t count;
 
-    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];  // ← Needed for file I/O
-    uint64_t created_at;                       // ← Timestamp when this chain was created
-    uint64_t updated_at;                       // ← Timestamp when it was last updated
+    uint8_t device_id[FOSSIL_DEVICE_ID_SIZE];  // For file I/O and ownership
+    uint64_t created_at;                       // Chain creation timestamp
+    uint64_t updated_at;                       // Last update timestamp
 } fossil_jellyfish_chain_t;
 
 // *****************************************************************************
@@ -299,14 +363,6 @@ float fossil_jellyfish_chain_trust_score(const fossil_jellyfish_chain_t *chain);
  * @param block Pointer to the memory block to mark as immutable.
  */
 void fossil_jellyfish_mark_immutable(fossil_jellyfish_block_t *block);
-
-/**
- * @brief Prunes invalid or low-confidence blocks from the chain.
- * @param chain The jellyfish memory chain.
- * @param min_confidence Threshold below which memories are removed.
- * @return Number of blocks pruned.
- */
-int fossil_jellyfish_prune_chain(fossil_jellyfish_chain_t *chain, float min_confidence);
 
 /**
  * @brief Deduplicates blocks with identical input/output pairs.
