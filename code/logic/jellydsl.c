@@ -129,7 +129,7 @@ static jellydsl_token jellydsl_lexer_next_token(jellydsl_lexer *lx) {
 
 // --- Parser ---
 
-static int jellydsl_parse_list(jellydsl_lexer *lx, char arr[][32], int max, int *out_count) {
+static int jellydsl_parse_list(jellydsl_lexer *lx, char arr[][32], int max, size_t *out_count) {
     *out_count = 0;
     jellydsl_token tok = jellydsl_lexer_next_token(lx);
     if (tok.type != TOK_LBRACKET) return -1;
@@ -223,9 +223,7 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
     } else { free(buf); return -1; }
 
     while (tok.type != TOK_RPAREN && tok.type != TOK_EOF) {
-        // --- Skip comments between fields ---
         while (tok.type == TOK_IDENTIFIER && tok.text[0] == '#') {
-            // Skip until end of line
             while (lx.pos < lx.len && lx.src[lx.pos] != '\n') lx.pos++;
             tok = jellydsl_lexer_next_token(&lx);
         }
@@ -261,15 +259,17 @@ int fossil_jellydsl_load_model(const char *filepath, fossil_jellyfish_jellydsl *
         } else if (strcmp(key, "state_machine") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
             strncpy(out->state_machine, tok.text, sizeof(out->state_machine) - 1);
         } else if (strcmp(key, "tags") == 0 && tok.type == TOK_LBRACKET) {
-            lx.pos--; // rewind so parse_list sees '['
-            if (jellydsl_parse_list(&lx, out->tags, FOSSIL_JELLYFISH_MAX_TAGS, &out->tag_count) != 0) { free(buf); return -1; }
+            lx.pos--;
+            int tag_count = 0;
+            if (jellydsl_parse_list(&lx, out->tags, FOSSIL_JELLYFISH_MAX_TAGS, &tag_count) != 0) { free(buf); return -1; }
+            out->tag_count = (size_t)tag_count;
         } else if (strcmp(key, "models") == 0 && tok.type == TOK_LBRACKET) {
             lx.pos--;
-            if (jellydsl_parse_list(&lx, out->models, FOSSIL_JELLYFISH_MAX_MODELS, &out->model_count) != 0) { free(buf); return -1; }
-        } else if (strcmp(key, "chain") == 0 && (tok.type == TOK_STRING || tok.type == TOK_IDENTIFIER)) {
-            // Optionally store chain path if your struct supports it
+            int model_count = 0;
+            if (jellydsl_parse_list(&lx, out->models, FOSSIL_JELLYFISH_MAX_MODELS, &model_count) != 0) { free(buf); return -1; }
+            out->model_count = (size_t)model_count;
         }
-        // skip trailing comma and comments
+
         tok = jellydsl_lexer_next_token(&lx);
         while (tok.type == TOK_IDENTIFIER && tok.text[0] == '#') {
             while (lx.pos < lx.len && lx.src[lx.pos] != '\n') lx.pos++;
@@ -288,27 +288,21 @@ int fossil_jellydsl_save_model(const char *filepath, const fossil_jellyfish_jell
     FILE *f = fopen(filepath, "w");
     if (!f) return -1;
 
-    // Meson-style: mindset('name', key: value, ...)
     fprintf(f, "mindset('%s',\n", model->name);
-
-    // description
     fprintf(f, "  description: '%s',\n", model->description);
 
-    // tags
     fprintf(f, "  tags: [");
-    for (int i = 0; i < model->tag_count; i++) {
+    for (size_t i = 0; i < model->tag_count; i++) {
         fprintf(f, "'%s'%s", model->tags[i], (i < model->tag_count - 1) ? ", " : "");
     }
     fprintf(f, "],\n");
 
-    // models
     fprintf(f, "  models: [");
-    for (int i = 0; i < model->model_count; i++) {
+    for (size_t i = 0; i < model->model_count; i++) {
         fprintf(f, "'%s'%s", model->models[i], (i < model->model_count - 1) ? ", " : "");
     }
     fprintf(f, "],\n");
 
-    // other fields
     fprintf(f, "  priority: %d,\n", model->priority);
     fprintf(f, "  confidence_threshold: %.4f,\n", model->confidence_threshold);
     fprintf(f, "  immutable: %s,\n", model->immutable ? "true" : "false");
