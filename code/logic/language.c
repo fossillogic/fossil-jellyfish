@@ -13,6 +13,8 @@
  */
 #include "fossil/ai/language.h"
 
+#define FOSSIL_LANG_PIPELINE_OUTPUT_SIZE 1024
+
 void fossil_lang_process(const fossil_lang_pipeline_t *pipe, const char *input, fossil_lang_result_t *out) {
     char working[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE] = {0};
     const char *src = input;
