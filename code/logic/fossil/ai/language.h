@@ -21,6 +21,27 @@ extern "C"
 {
 #endif
 
+typedef struct {
+    bool normalize;
+    bool tokenize;
+    bool detect_emotion;
+    bool detect_bias;
+    bool extract_focus;
+    bool is_question;
+    bool summarize;
+} fossil_lang_pipeline_t;
+
+typedef struct {
+    float emotion_score;
+    bool bias_detected;
+    bool is_question;
+    char focus[64];
+    char summary[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE];
+    char normalized[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE];
+    char tokens[64][32]; // optional: store tokens
+    size_t token_count;
+} fossil_lang_result_t;
+
 // *****************************************************************************
 // Function prototypes
 // *****************************************************************************
@@ -112,6 +133,11 @@ void fossil_lang_extract_focus(const char *input, char *out, size_t out_size);
  * Returns a float between 0.0 (no overlap) and 1.0 (identical sets).
  */
 float fossil_lang_similarity(const char *a, const char *b);
+
+void fossil_lang_process(const fossil_lang_pipeline_t *pipe, const char *input, fossil_lang_result_t *out);
+void fossil_lang_trace_log(const char *category, const char *input, float score);
+float fossil_lang_embedding_similarity(const float *vec_a, const float *vec_b, size_t len);
+void fossil_lang_generate_variants(const char *input, char outputs[][256], size_t max_outputs);
 
 #ifdef __cplusplus
 }
