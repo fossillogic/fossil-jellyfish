@@ -238,18 +238,30 @@ int fossil_jellydsl_load_meta(const char *filepath, fossil_jellyfish_jellydsl *m
 // .jfidea: Save/Load Freeform Text Ideas
 // ─────────────────────────────────────────────────────────────
 
-int fossil_jellydsl_save_idea(const char *filepath, const char *idea_text) {
-    if (!filepath || !idea_text) return -1;
-    return write_file(filepath, idea_text);
+int fossil_jellydsl_save_idea(const char *filepath, const fossil_jellydsl_idea *idea) {
+    if (!filepath || !idea) return -1;
+    FILE *f = fopen(filepath, "w");
+    if (!f) return errno;
+    fprintf(f, "seed=%s\n", idea->seed);
+    fprintf(f, "count=%d\n", idea->count);
+    // Write generated strings
+    for (int i = 0; i < idea->count && i < 8; i++) {
+        fprintf(f, "generated[%d]=%s\n", i, idea->generated[i]);
+    }
+    fclose(f);
+    return 0;
 }
 
-int fossil_jellydsl_load_idea(const char *filepath, char *out_buf, size_t buf_size) {
-    if (!filepath || !out_buf || buf_size == 0) return -1;
-    char *src = read_file(filepath);
-    if (!src) return -2;
-    strncpy(out_buf, src, buf_size - 1);
-    out_buf[buf_size - 1] = '\0';
-    free(src);
+int fossil_jellydsl_load_idea(const char *filepath, fossil_jellydsl_idea *out) {
+    if (!filepath || !out) return -1;
+    FILE *f = fopen(filepath, "r");
+    if (!f) return errno;
+    fscanf(f, "seed=%255[^\n]\n", out->seed);
+    fscanf(f, "count=%d\n", &out->count);
+    for (int i = 0; i < out->count && i < 8; i++) {
+        fscanf(f, "generated[%d]=%511[^\n]\n", &i, out->generated[i]);
+    }
+    fclose(f);
     return 0;
 }
 
@@ -281,18 +293,29 @@ int fossil_jellydsl_load_chain(const char *filepath, fossil_jellyfish_chain_t *o
 // .jfsig: Save/Load Signature (text or binary as base64)
 // ─────────────────────────────────────────────────────────────
 
-int fossil_jellydsl_save_signature(const char *filepath, const char *signature_text) {
-    if (!filepath || !signature_text) return -1;
-    return write_file(filepath, signature_text);
+int fossil_jellydsl_save_signature(const char *filepath, const fossil_jellydsl_signature *sig) {
+    if (!filepath || !sig) return -1;
+    FILE *f = fopen(filepath, "w");
+    if (!f) return errno;
+    fprintf(f, "signed_by=%s\n", sig->signed_by);
+    fprintf(f, "signature=%s\n", sig->signature);
+    fprintf(f, "hash=%s\n", sig->hash);
+    fprintf(f, "key_fingerprint=%s\n", sig->key_fingerprint);
+    fprintf(f, "timestamp=%llu\n", (unsigned long long)sig->timestamp);
+    fclose(f);
+    return 0;
 }
 
-int fossil_jellydsl_load_signature(const char *filepath, char *out_buf, size_t buf_size) {
-    if (!filepath || !out_buf || buf_size == 0) return -1;
-    char *src = read_file(filepath);
-    if (!src) return -2;
-    strncpy(out_buf, src, buf_size - 1);
-    out_buf[buf_size - 1] = '\0';
-    free(src);
+int fossil_jellydsl_load_signature(const char *filepath, fossil_jellydsl_signature *out) {
+    if (!filepath || !out) return -1;
+    FILE *f = fopen(filepath, "r");
+    if (!f) return errno;
+    fscanf(f, "signed_by=%63[^\n]\n", out->signed_by);
+    fscanf(f, "signature=%255[^\n]\n", out->signature);
+    fscanf(f, "hash=%63[^\n]\n", out->hash);
+    fscanf(f, "key_fingerprint=%63[^\n]\n", out->key_fingerprint);
+    fscanf(f, "timestamp=%llu\n", (unsigned long long *)&out->timestamp);
+    fclose(f);
     return 0;
 }
 
