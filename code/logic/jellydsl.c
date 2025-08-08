@@ -344,81 +344,104 @@ int fossil_jellydsl_load_chain(const char *filepath, fossil_jellyfish_chain_t *o
     memset(out, 0, sizeof(fossil_jellyfish_chain_t));
 
     char line[1024];
-    fossil_jellyfish_block_t temp = {0};
+    fossil_jellyfish_block_t temp;
+    memset(&temp, 0, sizeof(temp));
     int in_block = 0;
 
     while (fgets(line, sizeof(line), f)) {
         char *colon = strchr(line, ':');
-        if (!colon) continue;
+        if (!colon) {
+            // Detect block start/end
+            if (strchr(line, '{')) {
+                memset(&temp, 0, sizeof(temp));
+                in_block = 1;
+            } else if (strchr(line, '}')) {
+                if (in_block && out->count < FOSSIL_JELLYFISH_MAX_MEM) {
+                    out->memory[out->count++] = temp;
+                }
+                in_block = 0;
+            }
+            continue;
+        }
 
         *colon = '\0';
         char *key = trim(line);
         char *val = trim(colon + 1);
         strip_quotes(val);
 
-        if (strcmp(key, "created_at") == 0)
-            out->created_at = strtoull(val, NULL, 10);
-        else if (strcmp(key, "updated_at") == 0)
-            out->updated_at = strtoull(val, NULL, 10);
-        else if (strcmp(key, "device_id") == 0)
-            memcpy(out->device_id, val, strlen(val) < FOSSIL_DEVICE_ID_SIZE ? strlen(val) : FOSSIL_DEVICE_ID_SIZE);
-        else if (strcmp(key, "blocks") == 0)
-            in_block = 1;
-        else if (in_block && strcmp(key, "input") == 0)
-            strncpy(temp.input, val, FOSSIL_JELLYFISH_INPUT_SIZE);
-        else if (in_block && strcmp(key, "output") == 0)
-            strncpy(temp.output, val, FOSSIL_JELLYFISH_OUTPUT_SIZE);
-        else if (in_block && strcmp(key, "timestamp") == 0)
-            temp.timestamp = strtoull(val, NULL, 10);
-        else if (in_block && strcmp(key, "delta_ms") == 0)
-            temp.delta_ms = atoi(val);
-        else if (in_block && strcmp(key, "duration_ms") == 0)
-            temp.duration_ms = atoi(val);
-        else if (in_block && strcmp(key, "valid") == 0)
-            temp.valid = atoi(val);
-        else if (in_block && strcmp(key, "confidence") == 0)
-            temp.confidence = atof(val);
-        else if (in_block && strcmp(key, "usage_count") == 0)
-            temp.usage_count = atoi(val);
-        else if (in_block && strcmp(key, "immutable") == 0)
-            temp.immutable = atoi(val);
-        else if (in_block && strcmp(key, "block_type") == 0)
-            temp.block_type = atoi(val);
-        else if (in_block && strcmp(key, "imagined") == 0)
-            temp.imagined = atoi(val);
-        else if (in_block && strcmp(key, "imagined_from_index") == 0)
-            temp.imagined_from_index = (uint32_t)atoi(val);
-        else if (in_block && strcmp(key, "imagination_reason") == 0)
-            strncpy(temp.imagination_reason, val, sizeof(temp.imagination_reason));
-        else if (in_block && strcmp(key, "hash") == 0) {
-            // Expecting hex string for hash
+        if (!in_block) {
+            if (strcmp(key, "created_at") == 0)
+                out->created_at = strtoull(val, NULL, 10);
+            else if (strcmp(key, "updated_at") == 0)
+                out->updated_at = strtoull(val, NULL, 10);
+            else if (strcmp(key, "device_id") == 0) {
+                // device_id as hex string
+                size_t len = strlen(val) / 2;
+                if (len > FOSSIL_DEVICE_ID_SIZE) len = FOSSIL_DEVICE_ID_SIZE;
+                for (size_t i = 0; i < len; ++i) {
+                    unsigned int byte = 0;
+                    sscanf(val + 2 * i, "%2x", &byte);
+                    out->device_id[i] = (uint8_t)byte;
+                }
+            }
+            continue;
+        }
+
+        // Block fields
+        if (strcmp(key, "input") == 0)
+            strncpy(temp.io.input, val, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+        else if (strcmp(key, "output") == 0)
+            strncpy(temp.io.output, val, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+        else if (strcmp(key, "timestamp") == 0)
+            temp.time.timestamp = strtoull(val, NULL, 10);
+        else if (strcmp(key, "delta_ms") == 0)
+            temp.time.delta_ms = (uint32_t)atoi(val);
+        else if (strcmp(key, "duration_ms") == 0)
+            temp.time.duration_ms = (uint32_t)atoi(val);
+        else if (strcmp(key, "valid") == 0)
+            temp.attributes.valid = atoi(val);
+        else if (strcmp(key, "confidence") == 0)
+            temp.attributes.confidence = (float)atof(val);
+        else if (strcmp(key, "usage_count") == 0)
+            temp.attributes.usage_count = (uint32_t)atoi(val);
+        else if (strcmp(key, "immutable") == 0)
+            temp.attributes.immutable = atoi(val);
+        else if (strcmp(key, "block_type") == 0)
+            temp.block_type = (fossil_jellyfish_block_type_t)atoi(val);
+        else if (strcmp(key, "imagined") == 0)
+            temp.classify.is_hallucinated = atoi(val);
+        else if (strcmp(key, "imagined_from_index") == 0)
+            temp.classify.derived_from_index = (uint32_t)atoi(val);
+        else if (strcmp(key, "imagination_reason") == 0)
+            strncpy(temp.classify.classification_reason, val, sizeof(temp.classify.classification_reason) - 1);
+        else if (strcmp(key, "hash") == 0) {
+            // hex string to bytes
             size_t len = strlen(val) / 2;
             if (len > FOSSIL_JELLYFISH_HASH_SIZE) len = FOSSIL_JELLYFISH_HASH_SIZE;
             for (size_t i = 0; i < len; ++i) {
                 unsigned int byte = 0;
                 sscanf(val + 2 * i, "%2x", &byte);
-                temp.hash[i] = (uint8_t)byte;
+                temp.identity.hash[i] = (uint8_t)byte;
             }
         }
-        else if (in_block && strcmp(key, "signature") == 0) {
-            // Expecting hex string for signature
+        else if (strcmp(key, "signature") == 0) {
             size_t len = strlen(val) / 2;
             if (len > FOSSIL_SIGNATURE_SIZE) len = FOSSIL_SIGNATURE_SIZE;
             for (size_t i = 0; i < len; ++i) {
                 unsigned int byte = 0;
                 sscanf(val + 2 * i, "%2x", &byte);
-                temp.signature[i] = (uint8_t)byte;
+                temp.identity.signature[i] = (uint8_t)byte;
             }
         }
-        else if (in_block && strcmp(key, "device_id") == 0) {
-            // Block-level device_id (optional)
-            memcpy(temp.device_id, val, strlen(val) < FOSSIL_DEVICE_ID_SIZE ? strlen(val) : FOSSIL_DEVICE_ID_SIZE);
-        }
-        else if (in_block && strstr(key, "}")) {
-            // End of block
-            if (out->count < FOSSIL_JELLYFISH_MAX_MEM)
-                out->memory[out->count++] = temp;
-            memset(&temp, 0, sizeof(temp));
+        else if (strcmp(key, "device_id") == 0) {
+            // block-level device_id as hex string
+            size_t len = strlen(val) / 2;
+            if (len > FOSSIL_DEVICE_ID_SIZE) len = FOSSIL_DEVICE_ID_SIZE;
+            for (size_t i = 0; i < len; ++i) {
+                unsigned int byte = 0;
+                sscanf(val + 2 * i, "%2x", &byte);
+                temp.identity.device_id[i] = (uint8_t)byte;
+            }
         }
     }
 
@@ -434,48 +457,90 @@ int fossil_jellydsl_save_chain(const char *filepath, const fossil_jellyfish_chai
 
     fprintf(f, "created_at: %llu\n", (unsigned long long)chain->created_at);
     fprintf(f, "updated_at: %llu\n", (unsigned long long)chain->updated_at);
-    fprintf(f, "device_id: \"%.*s\"\n", FOSSIL_DEVICE_ID_SIZE, chain->device_id);
 
-    fprintf(f, "blocks: [\n");
+    // Write device_id as hex
+    fprintf(f, "device_id: \"");
+    for (size_t i = 0; i < FOSSIL_DEVICE_ID_SIZE; ++i)
+        fprintf(f, "%02x", chain->device_id[i]);
+    fprintf(f, "\"\n");
+
     for (size_t i = 0; i < chain->count; ++i) {
         const fossil_jellyfish_block_t *b = &chain->memory[i];
-        fprintf(f, "  {\n");
-        fprintf(f, "    input: \"%s\"\n", b->input);
-        fprintf(f, "    output: \"%s\"\n", b->output);
+        fprintf(f, "{\n");
 
-        // Write hash as hex
-        fprintf(f, "    hash: \"");
+        // IO
+        fprintf(f, "  input: \"%s\"\n", b->io.input);
+        fprintf(f, "  output: \"%s\"\n", b->io.output);
+
+        // Identity
+        fprintf(f, "  hash: \"");
         for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j)
-            fprintf(f, "%02x", b->hash[j]);
+            fprintf(f, "%02x", b->identity.hash[j]);
         fprintf(f, "\"\n");
 
-        fprintf(f, "    timestamp: %llu\n", (unsigned long long)b->timestamp);
-        fprintf(f, "    delta_ms: %u\n", b->delta_ms);
-        fprintf(f, "    duration_ms: %u\n", b->duration_ms);
-        fprintf(f, "    valid: %d\n", b->valid);
-        fprintf(f, "    confidence: %.4f\n", b->confidence);
-        fprintf(f, "    usage_count: %u\n", b->usage_count);
-
-        // Write device_id as hex
-        fprintf(f, "    device_id: \"");
+        fprintf(f, "  device_id: \"");
         for (size_t j = 0; j < FOSSIL_DEVICE_ID_SIZE; ++j)
-            fprintf(f, "%02x", b->device_id[j]);
+            fprintf(f, "%02x", b->identity.device_id[j]);
         fprintf(f, "\"\n");
 
-        // Write signature as hex
-        fprintf(f, "    signature: \"");
+        fprintf(f, "  signature: \"");
         for (size_t j = 0; j < FOSSIL_SIGNATURE_SIZE; ++j)
-            fprintf(f, "%02x", b->signature[j]);
+            fprintf(f, "%02x", b->identity.signature[j]);
         fprintf(f, "\"\n");
 
-        fprintf(f, "    immutable: %d\n", b->immutable);
-        fprintf(f, "    block_type: %d\n", b->block_type);
-        fprintf(f, "    imagined: %d\n", b->imagined);
-        fprintf(f, "    imagined_from_index: %u\n", b->imagined_from_index);
-        fprintf(f, "    imagination_reason: \"%s\"\n", b->imagination_reason);
-        fprintf(f, "  }\n");
+        fprintf(f, "  block_index: %u\n", b->identity.block_index);
+        fprintf(f, "  prev_block_index: %u\n", b->identity.prev_block_index);
+
+        fprintf(f, "  prev_hash: \"");
+        for (size_t j = 0; j < FOSSIL_JELLYFISH_HASH_SIZE; ++j)
+            fprintf(f, "%02x", b->identity.prev_hash[j]);
+        fprintf(f, "\"\n");
+
+        fprintf(f, "  signature_len: %u\n", b->identity.signature_len);
+
+        // Time
+        fprintf(f, "  timestamp: %llu\n", (unsigned long long)b->time.timestamp);
+        fprintf(f, "  delta_ms: %u\n", b->time.delta_ms);
+        fprintf(f, "  duration_ms: %u\n", b->time.duration_ms);
+        fprintf(f, "  updated_at: %llu\n", (unsigned long long)b->time.updated_at);
+        fprintf(f, "  expires_at: %llu\n", (unsigned long long)b->time.expires_at);
+        fprintf(f, "  validated_at: %llu\n", (unsigned long long)b->time.validated_at);
+
+        // Attributes
+        fprintf(f, "  immutable: %d\n", b->attributes.immutable);
+        fprintf(f, "  valid: %d\n", b->attributes.valid);
+        fprintf(f, "  confidence: %.4f\n", b->attributes.confidence);
+        fprintf(f, "  usage_count: %u\n", b->attributes.usage_count);
+        fprintf(f, "  pruned: %d\n", b->attributes.pruned);
+        fprintf(f, "  redacted: %d\n", b->attributes.redacted);
+        fprintf(f, "  deduplicated: %d\n", b->attributes.deduplicated);
+        fprintf(f, "  compressed: %d\n", b->attributes.compressed);
+        fprintf(f, "  expired: %d\n", b->attributes.expired);
+        fprintf(f, "  trusted: %d\n", b->attributes.trusted);
+        fprintf(f, "  conflicted: %d\n", b->attributes.conflicted);
+
+        // Block type
+        fprintf(f, "  block_type: %d\n", (int)b->block_type);
+
+        // Classification
+        fprintf(f, "  derived_from_index: %u\n", b->classify.derived_from_index);
+        fprintf(f, "  classification_reason: \"%s\"\n", b->classify.classification_reason);
+        fprintf(f, "  similarity_score: %.4f\n", b->classify.similarity_score);
+        fprintf(f, "  is_hallucinated: %d\n", b->classify.is_hallucinated);
+        fprintf(f, "  is_contradicted: %d\n", b->classify.is_contradicted);
+
+        // Tags
+        fprintf(f, "  tags: [");
+        for (int t = 0; t < FOSSIL_JELLYFISH_MAX_TAGS; ++t) {
+            if (b->classify.tags[t][0]) {
+                if (t > 0) fprintf(f, ", ");
+                fprintf(f, "\"%s\"", b->classify.tags[t]);
+            }
+        }
+        fprintf(f, "]\n");
+
+        fprintf(f, "}\n");
     }
-    fprintf(f, "]\n");
 
     fclose(f);
     return 0;

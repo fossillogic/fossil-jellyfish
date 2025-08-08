@@ -20,9 +20,9 @@ size_t fossil_lang_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TO
 
     for (size_t i = 0; i <= len; ++i) {
         char c = input[i];
-        if (isalnum(c)) {
+        if (isalnum((unsigned char)c)) {
             if (wi < FOSSIL_JELLYFISH_TOKEN_SIZE - 1)
-                word[wi++] = tolower(c);
+                word[wi++] = tolower((unsigned char)c);
         } else {
             if (wi > 0 && count < max_tokens) {
                 word[wi] = '\0';
@@ -91,10 +91,10 @@ int fossil_lang_align_truth(const fossil_jellyfish_chain_t *chain, const char *i
 
     for (size_t i = 0; i < chain->count; ++i) {
         const fossil_jellyfish_block_t *b = &chain->memory[i];
-        if (!b->valid) continue;
+        if (!b->attributes.valid) continue;
 
-        if (strcmp(input, b->input) == 0) {
-            if (strcmp(b->output, "false") == 0 || strcmp(b->output, "incorrect") == 0)
+        if (strcmp(input, b->io.input) == 0) {
+            if (strcmp(b->io.output, "false") == 0 || strcmp(b->io.output, "incorrect") == 0)
                 return -1;
             return 1;
         }

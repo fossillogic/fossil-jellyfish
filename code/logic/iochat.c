@@ -194,8 +194,9 @@ int fossil_io_chat_turn_count(const fossil_jellyfish_chain_t *chain) {
 
     int count = 0;
     for (size_t i = 0; i < chain->count; ++i) {
-        if (chain->memory[i].valid &&
-            strncmp(chain->memory[i].input, "[system]", sizeof("[system]") - 1) != 0) {
+        const fossil_jellyfish_block_t *b = &chain->memory[i];
+        if (b->attributes.valid &&
+            strncmp(b->io.input, "[system]", sizeof("[system]") - 1) != 0) {
             ++count;
         }
     }
@@ -208,10 +209,10 @@ int fossil_io_chat_summarize_session(const fossil_jellyfish_chain_t *chain, char
     size_t pos = 0;
     for (size_t i = 0; i < chain->count && pos + 64 < size; ++i) {
         const fossil_jellyfish_block_t *b = &chain->memory[i];
-        if (!b->valid) continue;
-        if (strncmp(b->input, "[system]", FOSSIL_JELLYFISH_INPUT_SIZE) == 0) continue;
+        if (!b->attributes.valid) continue;
+        if (strncmp(b->io.input, "[system]", FOSSIL_JELLYFISH_INPUT_SIZE) == 0) continue;
 
-        int written = snprintf(summary + pos, size - pos, "[%s] %s. ", b->input, b->output);
+        int written = snprintf(summary + pos, size - pos, "[%s] %s. ", b->io.input, b->io.output);
         if (written < 0) break;
         pos += written;
     }
@@ -227,12 +228,12 @@ int fossil_io_chat_filter_recent(const fossil_jellyfish_chain_t *chain, fossil_j
 
     for (int i = (int)chain->count - 1; i >= 0 && added < turn_count; --i) {
         const fossil_jellyfish_block_t *b = &chain->memory[i];
-        if (!b->valid) continue;
-        if (strncmp(b->input, "[system]", FOSSIL_JELLYFISH_INPUT_SIZE) == 0) continue;
+        if (!b->attributes.valid) continue;
+        if (strncmp(b->io.input, "[system]", FOSSIL_JELLYFISH_INPUT_SIZE) == 0) continue;
 
         // Copy recent valid user turn
         out_chain->memory[turn_count - added - 1] = *b;  // reverse order
-        out_chain->memory[turn_count - added - 1].valid = true;
+        out_chain->memory[turn_count - added - 1].attributes.valid = 1;
         added++;
     }
 
@@ -248,9 +249,9 @@ int fossil_io_chat_export_history(const fossil_jellyfish_chain_t *chain, const c
 
     for (size_t i = 0; i < chain->count; ++i) {
         const fossil_jellyfish_block_t *b = &chain->memory[i];
-        if (!b->valid) continue;
+        if (!b->attributes.valid) continue;
 
-        fprintf(f, "[%s] => %s\n", b->input, b->output);
+        fprintf(f, "[%s] => %s\n", b->io.input, b->io.output);
     }
 
     fclose(f);
