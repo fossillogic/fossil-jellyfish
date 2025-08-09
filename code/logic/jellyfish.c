@@ -309,6 +309,73 @@ static int read_all(FILE *f, void *buf, size_t size) {
     return fread(buf, 1, size, f) == size ? 0 : -1;
 }
 
+// Serialize the chain to a buffer. Returns number of bytes written, or 0 on error.
+size_t fossil_jellyfish_serialize_to_buffer(const fossil_jellyfish_chain_t *chain, uint8_t *buffer, size_t max_size) {
+    if (!chain || !buffer || max_size == 0) return 0;
+
+    size_t offset = 0;
+
+    // Write chain metadata: device_id, created_at, updated_at, count
+    if (offset + FOSSIL_DEVICE_ID_SIZE + sizeof(uint64_t) * 2 + sizeof(uint32_t) > max_size)
+        return 0;
+    memcpy(buffer + offset, chain->device_id, FOSSIL_DEVICE_ID_SIZE);
+    offset += FOSSIL_DEVICE_ID_SIZE;
+    memcpy(buffer + offset, &chain->created_at, sizeof(uint64_t));
+    offset += sizeof(uint64_t);
+    memcpy(buffer + offset, &chain->updated_at, sizeof(uint64_t));
+    offset += sizeof(uint64_t);
+    uint32_t count = (uint32_t)chain->count;
+    memcpy(buffer + offset, &count, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    // Write each block (only up to chain->count)
+    for (size_t i = 0; i < chain->count; ++i) {
+        if (offset + sizeof(fossil_jellyfish_block_t) > max_size)
+            return 0;
+        memcpy(buffer + offset, &chain->memory[i], sizeof(fossil_jellyfish_block_t));
+        offset += sizeof(fossil_jellyfish_block_t);
+    }
+
+    return offset;
+}
+
+// Deserialize the chain from a buffer. Returns 0 on success, -1 on error.
+int fossil_jellyfish_deserialize_from_buffer(fossil_jellyfish_chain_t *chain, const uint8_t *buffer, size_t size) {
+    if (!chain || !buffer || size < FOSSIL_DEVICE_ID_SIZE + sizeof(uint64_t) * 2 + sizeof(uint32_t))
+        return -1;
+
+    size_t offset = 0;
+
+    memcpy(chain->device_id, buffer + offset, FOSSIL_DEVICE_ID_SIZE);
+    offset += FOSSIL_DEVICE_ID_SIZE;
+    memcpy(&chain->created_at, buffer + offset, sizeof(uint64_t));
+    offset += sizeof(uint64_t);
+    memcpy(&chain->updated_at, buffer + offset, sizeof(uint64_t));
+    offset += sizeof(uint64_t);
+    uint32_t count = 0;
+    memcpy(&count, buffer + offset, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+
+    if (count > FOSSIL_JELLYFISH_MAX_MEM)
+        return -1;
+
+    if (offset + count * sizeof(fossil_jellyfish_block_t) > size)
+        return -1;
+
+    for (size_t i = 0; i < count; ++i) {
+        memcpy(&chain->memory[i], buffer + offset, sizeof(fossil_jellyfish_block_t));
+        offset += sizeof(fossil_jellyfish_block_t);
+    }
+    chain->count = count;
+
+    // Zero out the rest of the memory array
+    for (size_t i = count; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
+        memset(&chain->memory[i], 0, sizeof(fossil_jellyfish_block_t));
+    }
+
+    return 0;
+}
+
 // Main Source Implementation
 
 void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
@@ -337,22 +404,6 @@ fossil_jellyfish_block_t *fossil_jellyfish_find(fossil_jellyfish_chain_t *chain,
         }
     }
     return NULL;
-}
-
-void fossil_jellyfish_update(fossil_jellyfish_chain_t *chain, size_t index, const char *input, const char *output) {
-    if (!chain || index >= FOSSIL_JELLYFISH_MAX_MEM) return;
-
-    fossil_jellyfish_block_t *block = &chain->memory[index];
-    if (block->attributes.valid) {
-        strncpy(block->io.input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
-        block->io.input[FOSSIL_JELLYFISH_INPUT_SIZE - 1] = '\0';
-        strncpy(block->io.output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
-        block->io.output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
-
-        block->io.input_len = strlen(block->io.input);
-        block->io.output_len = strlen(block->io.output);
-        block->time.updated_at = (uint64_t)time(NULL);
-    }
 }
 
 void fossil_jellyfish_update(fossil_jellyfish_chain_t *chain, size_t index, const char *input, const char *output) {
@@ -617,7 +668,7 @@ int fossil_jellyfish_load(fossil_jellyfish_chain_t *chain, const char *filepath)
     // Find size of serialized data by seeking to end and subtracting header + CRC sizes
     fseek(f, 0, SEEK_END);
     long file_size = ftell(f);
-    if (file_size < 9 + sizeof(uint32_t) + sizeof(uint32_t)) {
+    if (file_size < (long)(9 + sizeof(uint32_t) + sizeof(uint32_t))) {
         fclose(f);
         return -4;  // File too small
     }
