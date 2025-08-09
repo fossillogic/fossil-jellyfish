@@ -1123,32 +1123,44 @@ const char* fossil_jellyfish_reason(fossil_jellyfish_chain_t *chain, const char 
 void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain_t *chain, float decay_rate) {
     if (!chain || chain->count == 0 || decay_rate <= 0.0f) return;
 
-    // Per-type minimum confidence thresholds
-    const float min_conf[5] = {
-        0.05f, // BASIC
-        0.10f, // IMAGINED
-        0.10f, // DERIVED
+    // Per-type confidence thresholds, matching block_type enum (0 to 10)
+    const float min_conf[11] = {
+        0.05f, // UNKNOWN
+        0.05f, // OBSERVED
+        0.10f, // INFERRED
+        0.15f, // VALIDATED
+        0.10f, // CORRECTED
+        0.10f, // ASSUMED
+        0.05f, // RETRACTED
         0.20f, // EXPERIMENTAL
-        0.02f  // VERIFIED
+        0.10f, // GUIDED
+        0.20f, // IMMUTABLE
+        0.02f  // ARCHIVED
     };
-    const float max_conf[5] = {
-        1.0f, // BASIC
-        1.0f, // IMAGINED
-        1.0f, // DERIVED
+    const float max_conf[11] = {
+        1.0f, // UNKNOWN
+        1.0f, // OBSERVED
+        1.0f, // INFERRED
+        1.0f, // VALIDATED
+        1.0f, // CORRECTED
+        1.0f, // ASSUMED
+        1.0f, // RETRACTED
         1.0f, // EXPERIMENTAL
-        1.0f  // VERIFIED
+        1.0f, // GUIDED
+        1.0f, // IMMUTABLE
+        1.0f  // ARCHIVED
     };
 
-    // Clamp half-life
     double half_life_seconds = fmax(1.0, (double)decay_rate);
     time_t now = time(NULL);
 
     for (size_t i = 0; i < chain->count; ++i) {
         fossil_jellyfish_block_t *block = &chain->memory[i];
+
         if (!block->attributes.valid || block->attributes.immutable) continue;
 
         int t = block->block_type;
-        if (t < 0 || t > 4) t = 0; // fallback to BASIC
+        if (t < 0 || t > 10) t = 0; // Clamp to UNKNOWN
 
         time_t block_time = (time_t)(block->time.timestamp / 1000);
         time_t age_seconds = now - block_time;
@@ -1156,9 +1168,12 @@ void fossil_jellyfish_decay_confidence(fossil_jellyfish_chain_t *chain, float de
 
         double decay_factor = pow(0.5, (double)age_seconds / half_life_seconds);
         block->attributes.confidence *= (float)decay_factor;
-        block->attributes.confidence = fmaxf(0.0f, fminf(block->attributes.confidence, max_conf[t]));
+
+        // Clamp confidence
         if (block->attributes.confidence < min_conf[t]) {
             block->attributes.valid = 0;
+        } else if (block->attributes.confidence > max_conf[t]) {
+            block->attributes.confidence = max_conf[t];
         }
     }
 }
