@@ -76,7 +76,11 @@ bool fossil_lang_is_question(const char *input) {
 
     if (input[len - 1] == '?') return true;
 
-    const char *wh[] = {"what", "why", "how", "who", "when", "where", "is", "are", "do", "does", "can"};
+    const char *wh[] = {
+        "what", "why", "how", "who", "when", "where", "is", "are", "do", "does", "can",
+        "could", "would", "should", "will", "did", "may", "might", "shall", "whose", "whom",
+        "which", "was", "were", "has", "have", "had", "am"
+    };
     char first[16] = {0};
 
     sscanf(input, "%15s", first);
@@ -90,8 +94,20 @@ bool fossil_lang_is_question(const char *input) {
 }
 
 float fossil_lang_detect_emotion(const char *input) {
-    const char *positive[] = {"great", "love", "happy", "good", "excellent", "amazing", "yes"};
-    const char *negative[] = {"hate", "bad", "sad", "angry", "terrible", "no", "awful"};
+    const char *positive[] = {
+        "great", "love", "happy", "good", "excellent", "amazing", "yes", "awesome", "fantastic", "wonderful",
+        "positive", "joy", "joyful", "delight", "delighted", "pleased", "satisfied", "brilliant", "superb",
+        "outstanding", "cheerful", "smile", "smiling", "success", "successful", "win", "winning", "enjoy",
+        "enjoyed", "enjoying", "like", "liked", "likes", "best", "cool", "nice", "grateful", "thankful",
+        "optimistic", "hopeful", "enthusiastic", "encouraged", "motivated", "inspired", "peaceful", "calm"
+    };
+    const char *negative[] = {
+        "hate", "bad", "sad", "angry", "terrible", "no", "awful", "horrible", "worst", "negative", "pain",
+        "painful", "disappointed", "disappointing", "failure", "fail", "loser", "lose", "losing", "cry",
+        "crying", "depressed", "upset", "mad", "furious", "annoyed", "frustrated", "dislike", "disliked",
+        "disgust", "disgusted", "unhappy", "miserable", "hopeless", "pessimistic", "resentful", "bitter",
+        "jealous", "regret", "ashamed", "guilty", "afraid", "scared", "fear", "anxious", "nervous"
+    };
 
     float score = 0.0f;
     char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
@@ -112,7 +128,14 @@ float fossil_lang_detect_emotion(const char *input) {
 int fossil_lang_detect_bias_or_falsehood(const char *input) {
     const char *bias_phrases[] = {
         "everyone knows", "obviously", "literally", "always", "never", "the truth is",
-        "you have to believe", "no one can deny", "it's a fact", "fake news"
+        "you have to believe", "no one can deny", "it's a fact", "fake news",
+        "clearly", "undeniably", "without a doubt", "as we all know", "it is certain",
+        "all the experts agree", "it goes without saying", "as everyone agrees",
+        "the only explanation", "there is no alternative", "must be true",
+        "cannot be false", "beyond question", "no one disagrees", "it is proven",
+        "everybody says", "it is obvious", "as is well known", "it is well established",
+        "the fact remains", "the reality is", "it is clear", "it is evident",
+        "the simple truth", "the undeniable fact", "the only possible", "it is universally accepted"
     };
 
     for (size_t i = 0; i < sizeof(bias_phrases) / sizeof(bias_phrases[0]); ++i) {
@@ -176,7 +199,45 @@ void fossil_lang_normalize(const char *input, char *out, size_t out_size) {
         {"ur", "your"},
         {"im", "I am"},
         {"idk", "I don't know"},
-        {"lol", "(laughing)"}
+        {"lol", "(laughing)"},
+        {"btw", "by the way"},
+        {"brb", "be right back"},
+        {"omg", "oh my god"},
+        {"thx", "thanks"},
+        {"pls", "please"},
+        {"plz", "please"},
+        {"b4", "before"},
+        {"gr8", "great"},
+        {"lmk", "let me know"},
+        {"np", "no problem"},
+        {"tbh", "to be honest"},
+        {"afaik", "as far as I know"},
+        {"asap", "as soon as possible"},
+        {"fyi", "for your information"},
+        {"smh", "shaking my head"},
+        {"tldr", "too long; didn't read"},
+        {"bff", "best friend forever"},
+        {"jk", "just kidding"},
+        {"nvm", "never mind"},
+        {"rofl", "rolling on the floor laughing"},
+        {"ttyl", "talk to you later"},
+        {"wyd", "what are you doing"},
+        {"wbu", "what about you"},
+        {"irl", "in real life"},
+        {"dm", "direct message"},
+        {"imo", "in my opinion"},
+        {"imho", "in my humble opinion"},
+        {"ftw", "for the win"},
+        {"gg", "good game"},
+        {"afk", "away from keyboard"},
+        {"bc", "because"},
+        {"tho", "though"},
+        {"sup", "what's up"},
+        {"ya", "you"},
+        {"tho", "though"},
+        {"msg", "message"},
+        {"pic", "picture"},
+        {"pics", "pictures"}
     };
 
     const char *p = input;
@@ -235,10 +296,16 @@ void fossil_lang_summarize(const char *input, char *out, size_t out_size) {
 void fossil_lang_extract_focus(const char *input, char *out, size_t out_size) {
     const char *stopwords[] = {
         "i", "you", "we", "they", "he", "she", "it",
-        "am", "is", "are", "was", "were", "be", "been",
-        "do", "does", "did", "will", "can", "should", "would", "could",
-        "to", "a", "an", "the", "and", "or", "in", "on", "for", "with",
-        "this", "that", "these", "those", "of", "at", "as", "from", "by"
+        "me", "my", "mine", "your", "yours", "our", "ours", "their", "theirs", "his", "her", "hers", "its",
+        "am", "is", "are", "was", "were", "be", "been", "being",
+        "do", "does", "did", "doing", "will", "can", "should", "would", "could", "may", "might", "must", "shall",
+        "have", "has", "had", "having",
+        "to", "a", "an", "the", "and", "or", "but", "if", "then", "else", "in", "on", "for", "with", "about", "against",
+        "this", "that", "these", "those", "of", "at", "as", "from", "by", "so", "such", "than", "too", "very", "just",
+        "not", "no", "nor", "yet", "also", "because", "while", "where", "when", "which", "who", "whom", "whose", "what",
+        "how", "why", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "only", "own", "same",
+        "over", "under", "again", "further", "once", "here", "there", "out", "up", "down", "off", "above", "below", "into",
+        "between", "through", "during", "before", "after", "around", "among"
     };
 
     char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
@@ -317,7 +384,42 @@ static const synonym_pair replacements[] = {
     {"angry", "mad"},
     {"love", "adore"},
     {"hate", "dislike"},
-    {"good", "nice"}
+    {"good", "nice"},
+    {"bad", "poor"},
+    {"fast", "quick"},
+    {"slow", "sluggish"},
+    {"smart", "intelligent"},
+    {"dumb", "unintelligent"},
+    {"easy", "simple"},
+    {"hard", "difficult"},
+    {"big", "large"},
+    {"small", "tiny"},
+    {"old", "ancient"},
+    {"young", "youthful"},
+    {"strong", "powerful"},
+    {"weak", "frail"},
+    {"rich", "wealthy"},
+    {"poor", "destitute"},
+    {"clean", "spotless"},
+    {"dirty", "filthy"},
+    {"funny", "humorous"},
+    {"serious", "grave"},
+    {"quick", "rapid"},
+    {"slow", "lethargic"},
+    {"beautiful", "gorgeous"},
+    {"ugly", "unattractive"},
+    {"friendly", "amiable"},
+    {"mean", "cruel"},
+    {"hot", "warm"},
+    {"cold", "chilly"},
+    {"bright", "luminous"},
+    {"dark", "dim"},
+    {"easy", "effortless"},
+    {"difficult", "challenging"},
+    {"important", "crucial"},
+    {"unimportant", "trivial"},
+    {"safe", "secure"},
+    {"dangerous", "hazardous"}
 };
 
 void fossil_lang_generate_variants(const char *input, char outputs[][256], size_t max_outputs) {
