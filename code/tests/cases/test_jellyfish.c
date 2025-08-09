@@ -45,7 +45,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_init) {
     fossil_jellyfish_init(&chain);
     ASSUME_ITS_EQUAL_SIZE(chain.count, 0);
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
-        ASSUME_ITS_TRUE(chain.memory[i].valid == 0);
+        ASSUME_ITS_TRUE(chain.memory[i].attributes.valid == 0);
     }
 }
 
@@ -55,9 +55,9 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_learn_and_reason) {
 
     fossil_jellyfish_learn(&chain, "hello", "world");
     ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "hello");
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "world");
-    ASSUME_ITS_TRUE(chain.memory[0].valid == 1);
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].io.input, "hello");
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].io.output, "world");
+    ASSUME_ITS_TRUE(chain.memory[0].attributes.valid == 1);
 
     const char *result = fossil_jellyfish_reason(&chain, "hello");
     ASSUME_ITS_EQUAL_CSTR(result, "world");
@@ -72,13 +72,13 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_cleanup) {
     fossil_jellyfish_init(&chain);
 
     fossil_jellyfish_learn(&chain, "a", "b");
-    chain.memory[0].confidence = 0.01f; // force low confidence
-    chain.memory[0].valid = 1;
+    chain.memory[0].attributes.confidence = 0.01f; // force low confidence
+    chain.memory[0].attributes.valid = 1;
     chain.count = 1;
 
     fossil_jellyfish_cleanup(&chain);
     ASSUME_ITS_EQUAL_SIZE(chain.count, 0);
-    ASSUME_ITS_TRUE(chain.memory[0].valid == 0);
+    ASSUME_ITS_TRUE(chain.memory[0].attributes.valid == 0);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_chain_hash) {
@@ -140,14 +140,14 @@ FOSSIL_TEST_CASE(c_test_jellyfish_reason_chain) {
 FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
     fossil_jellyfish_chain_t chain = {0};
     fossil_jellyfish_learn(&chain, "a", "b");
-    chain.memory[0].confidence = 1.0f;
-    chain.memory[0].valid = 1;
+    chain.memory[0].attributes.confidence = 1.0f;
+    chain.memory[0].attributes.valid = 1;
     chain.count = 1;
 
     fossil_jellyfish_decay_confidence(&chain, 0.5f);
-    ASSUME_ITS_TRUE(chain.memory[0].confidence < 1.0f);
+    ASSUME_ITS_TRUE(chain.memory[0].attributes.confidence < 1.0f);
     fossil_jellyfish_decay_confidence(&chain, 0.9f);
-    ASSUME_ITS_TRUE(chain.memory[0].valid == 0 || chain.memory[0].confidence < 0.05f);
+    ASSUME_ITS_TRUE(chain.memory[0].attributes.valid == 0 || chain.memory[0].attributes.confidence < 0.05f);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_tokenize) {
@@ -163,15 +163,15 @@ FOSSIL_TEST_CASE(c_test_jellyfish_best_memory) {
     fossil_jellyfish_chain_t chain = {0};
     fossil_jellyfish_learn(&chain, "a", "b");
     fossil_jellyfish_learn(&chain, "c", "d");
-    chain.memory[0].confidence = 0.5f;
-    chain.memory[1].confidence = 0.9f;
-    chain.memory[0].valid = 1;
-    chain.memory[1].valid = 1;
+    chain.memory[0].attributes.confidence = 0.5f;
+    chain.memory[1].attributes.confidence = 0.9f;
+    chain.memory[0].attributes.valid = 1;
+    chain.memory[1].attributes.valid = 1;
     chain.count = 2;
 
     const fossil_jellyfish_block_t *best = fossil_jellyfish_best_memory(&chain);
     ASSUME_ITS_TRUE(best != NULL);
-    ASSUME_ITS_EQUAL_CSTR(best->input, "c");
+    ASSUME_ITS_EQUAL_CSTR(best->io.input, "c");
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_detect_conflict) {
@@ -191,7 +191,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_detect_conflict) {
 FOSSIL_TEST_CASE(c_test_jellyfish_knowledge_coverage) {
     fossil_jellyfish_chain_t chain = {0};
     fossil_jellyfish_learn(&chain, "a", "b");
-    chain.memory[0].valid = 1;
+    chain.memory[0].attributes.valid = 1;
     chain.count = 1;
     float coverage = fossil_jellyfish_knowledge_coverage(&chain);
     ASSUME_ITS_TRUE(coverage >= 0.0f && coverage <= 1.0f);
@@ -199,10 +199,10 @@ FOSSIL_TEST_CASE(c_test_jellyfish_knowledge_coverage) {
 
 FOSSIL_TEST_CASE(c_test_jellyfish_verify_block_and_chain) {
     fossil_jellyfish_block_t block = {0};
-    strcpy(block.input, "foo");
-    strcpy(block.output, "bar");
-    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) block.hash[i] = 1;
-    block.valid = 1;
+    strcpy(block.io.input, "foo");
+    strcpy(block.io.output, "bar");
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i) block.identity.hash[i] = 1;
+    block.attributes.valid = 1;
 
     ASSUME_ITS_TRUE(fossil_jellyfish_verify_block(&block));
 
@@ -214,40 +214,40 @@ FOSSIL_TEST_CASE(c_test_jellyfish_verify_block_and_chain) {
 
 FOSSIL_TEST_CASE(c_test_jellyfish_block_struct_fields) {
     fossil_jellyfish_block_t block = {0};
-    strcpy(block.input, "test_input");
-    strcpy(block.output, "test_output");
-    block.timestamp = 123456789;
-    block.delta_ms = 42;
-    block.duration_ms = 100;
-    block.valid = 1;
-    block.confidence = 0.75f;
-    block.usage_count = 3;
-    memset(block.device_id, 0xAB, sizeof(block.device_id));
-    memset(block.signature, 0xCD, sizeof(block.signature));
+    strcpy(block.io.input, "test_input");
+    strcpy(block.io.output, "test_output");
+    block.time.timestamp = 123456789;
+    block.time.delta_ms = 42;
+    block.time.duration_ms = 100;
+    block.attributes.valid = 1;
+    block.attributes.confidence = 0.75f;
+    block.attributes.usage_count = 3;
+    memset(block.identity.device_id, 0xAB, sizeof(block.identity.device_id));
+    memset(block.identity.signature, 0xCD, sizeof(block.identity.signature));
 
-    ASSUME_ITS_EQUAL_CSTR(block.input, "test_input");
-    ASSUME_ITS_EQUAL_CSTR(block.output, "test_output");
-    ASSUME_ITS_TRUE(block.timestamp == 123456789);
-    ASSUME_ITS_TRUE(block.delta_ms == 42);
-    ASSUME_ITS_TRUE(block.duration_ms == 100);
-    ASSUME_ITS_TRUE(block.valid == 1);
-    ASSUME_ITS_TRUE(block.confidence > 0.74f && block.confidence < 0.76f);
-    ASSUME_ITS_TRUE(block.usage_count == 3);
-    for (size_t i = 0; i < sizeof(block.device_id); ++i)
-        ASSUME_ITS_TRUE(block.device_id[i] == 0xAB);
-    for (size_t i = 0; i < sizeof(block.signature); ++i)
-        ASSUME_ITS_TRUE(block.signature[i] == 0xCD);
+    ASSUME_ITS_EQUAL_CSTR(block.io.input, "test_input");
+    ASSUME_ITS_EQUAL_CSTR(block.io.output, "test_output");
+    ASSUME_ITS_TRUE(block.time.timestamp == 123456789);
+    ASSUME_ITS_TRUE(block.time.delta_ms == 42);
+    ASSUME_ITS_TRUE(block.time.duration_ms == 100);
+    ASSUME_ITS_TRUE(block.attributes.valid == 1);
+    ASSUME_ITS_TRUE(block.attributes.confidence > 0.74f && block.attributes.confidence < 0.76f);
+    ASSUME_ITS_TRUE(block.attributes.usage_count == 3);
+    for (size_t i = 0; i < sizeof(block.identity.device_id); ++i)
+        ASSUME_ITS_TRUE(block.identity.device_id[i] == 0xAB);
+    for (size_t i = 0; i < sizeof(block.identity.signature); ++i)
+        ASSUME_ITS_TRUE(block.identity.signature[i] == 0xCD);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_chain_struct_fields) {
     fossil_jellyfish_chain_t chain = {0};
-    strcpy(chain.memory[0].input, "foo");
-    strcpy(chain.memory[0].output, "bar");
+    strcpy(chain.memory[0].io.input, "foo");
+    strcpy(chain.memory[0].io.output, "bar");
     chain.count = 1;
 
     ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "foo");
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "bar");
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].io.input, "foo");
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].io.output, "bar");
 }
 
 // * * * * * * * * * * * * * * * * * * * * * * * *
