@@ -278,7 +278,6 @@ FOSSIL_TEST_CASE(c_test_jellyfish_tokenize_basic) {
     ASSUME_ITS_EQUAL_CSTR(tokens[0], "hello");
     ASSUME_ITS_EQUAL_CSTR(tokens[1], "world");
 }
-}
 
 FOSSIL_TEST_CASE(c_test_jellyfish_best_memory_returns_highest_confidence) {
     fossil_jellyfish_chain_t chain;
