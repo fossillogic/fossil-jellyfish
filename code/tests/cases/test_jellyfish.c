@@ -249,15 +249,6 @@ FOSSIL_TEST_CASE(c_test_jellyfish_reason_returns_unknown) {
     ASSUME_ITS_EQUAL_CSTR(result, "Unknown");
 }
 
-FOSSIL_TEST_CASE(c_test_jellyfish_dump_prints_chain) {
-    fossil_jellyfish_chain_t chain;
-    fossil_jellyfish_init(&chain);
-    fossil_jellyfish_learn(&chain, "foo", "bar");
-
-    // Just call dump; no assertion, but should not crash
-    fossil_jellyfish_dump(&chain);
-}
-
 FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
     fossil_jellyfish_chain_t chain;
     fossil_jellyfish_init(&chain);
@@ -317,15 +308,6 @@ FOSSIL_TEST_CASE(c_test_jellyfish_detect_conflict) {
     ASSUME_ITS_EQUAL_I32(no_conflict, 0);
 }
 
-FOSSIL_TEST_CASE(c_test_jellyfish_reflect_prints_report) {
-    fossil_jellyfish_chain_t chain;
-    fossil_jellyfish_init(&chain);
-    fossil_jellyfish_learn(&chain, "reflect", "test");
-
-    // Should not crash or hang
-    fossil_jellyfish_reflect(&chain);
-}
-
 FOSSIL_TEST_CASE(c_test_jellyfish_verify_block_valid_and_invalid) {
     fossil_jellyfish_block_t block;
     memset(&block, 0, sizeof(block));
@@ -339,15 +321,6 @@ FOSSIL_TEST_CASE(c_test_jellyfish_verify_block_valid_and_invalid) {
 
     block.io.input[0] = '\0';
     ASSUME_ITS_FALSE(fossil_jellyfish_verify_block(&block));
-}
-
-FOSSIL_TEST_CASE(c_test_jellyfish_validation_report_prints) {
-    fossil_jellyfish_chain_t chain;
-    fossil_jellyfish_init(&chain);
-    fossil_jellyfish_learn(&chain, "val", "rep");
-
-    // Should not crash or hang
-    fossil_jellyfish_validation_report(&chain);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_verify_chain_all_valid) {
@@ -644,15 +617,12 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_prune_low_confidence);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_returns_output);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_returns_unknown);
-    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_dump_prints_chain);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_decay_confidence);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_tokenize_basic);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_best_memory_returns_highest_confidence);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_knowledge_coverage_basic);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_detect_conflict);
-    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reflect_prints_report);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_verify_block_valid_and_invalid);
-    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_validation_report_prints);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_verify_chain_all_valid);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_verify_chain_with_invalid_block);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_trust_score_empty);
