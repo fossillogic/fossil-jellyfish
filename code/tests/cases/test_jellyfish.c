@@ -96,7 +96,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_init_zeroes_chain) {
     fossil_jellyfish_chain_t chain;
     memset(&chain, 0xFF, sizeof(chain)); // Fill with nonzero
     fossil_jellyfish_init(&chain);
-    ASSUME_ITS_EQUAL(chain.count, 0);
+    ASSUME_ITS_EQUAL_I32(chain.count, 0);
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
         int all_zero = 1;
         const uint8_t *mem = (const uint8_t *)&chain.memory[i];
@@ -166,12 +166,12 @@ FOSSIL_TEST_CASE(c_test_jellyfish_save_and_load) {
 
     const char *filepath = "test_jellyfish_save.bin";
     int save_result = fossil_jellyfish_save(&chain, filepath);
-    ASSUME_ITS_EQUAL(save_result, 0);
+    ASSUME_ITS_EQUAL_I32(save_result, 0);
 
     int load_result = fossil_jellyfish_load(&loaded, filepath);
-    ASSUME_ITS_EQUAL(load_result, 0);
+    ASSUME_ITS_EQUAL_I32(load_result, 0);
 
-    ASSUME_ITS_EQUAL(chain.count, loaded.count);
+    ASSUME_ITS_EQUAL_I32(chain.count, loaded.count);
     for (size_t i = 0; i < chain.count; ++i) {
         ASSUME_ITS_EQUAL_MEMORY(&chain.memory[i], &loaded.memory[i], sizeof(fossil_jellyfish_block_t));
     }
@@ -203,7 +203,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_cleanup_removes_invalid_blocks) {
     size_t valid_count = 0;
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i)
         if (chain.memory[i].attributes.valid) valid_count++;
-    ASSUME_ITS_EQUAL(valid_count, 1);
+    ASSUME_ITS_EQUAL_I32(valid_count, 1);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_audit_detects_duplicate_hash) {
@@ -224,10 +224,10 @@ FOSSIL_TEST_CASE(c_test_jellyfish_prune_low_confidence) {
 
     fossil_jellyfish_learn(&chain, "x", "y");
     // Set confidence low
-    chain.memory[0].confidence = 0.01f;
+    chain.memory[0].attributes.confidence = 0.01f;
 
     int pruned = fossil_jellyfish_prune(&chain, 0.5f);
-    ASSUME_ITS_EQUAL(pruned, 1);
+    ASSUME_ITS_EQUAL_I32(pruned, 1);
     ASSUME_ITS_FALSE(chain.memory[0].attributes.valid);
 }
 
@@ -262,12 +262,12 @@ FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
     fossil_jellyfish_init(&chain);
 
     fossil_jellyfish_learn(&chain, "decay", "test");
-    chain.memory[0].confidence = 1.0f;
+    chain.memory[0].attributes.confidence = 1.0f;
 
     fossil_jellyfish_decay_confidence(&chain, 0.5f);
 
-    ASSUME_ITS_TRUE(chain.memory[0].confidence < 1.0f);
-    ASSUME_ITS_TRUE(chain.memory[0].confidence > 0.0f);
+    ASSUME_ITS_TRUE(chain.memory[0].attributes.confidence < 1.0f);
+    ASSUME_ITS_TRUE(chain.memory[0].attributes.confidence > 0.0f);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_tokenize_basic) {
@@ -285,12 +285,12 @@ FOSSIL_TEST_CASE(c_test_jellyfish_best_memory_returns_highest_confidence) {
 
     fossil_jellyfish_learn(&chain, "a", "1");
     fossil_jellyfish_learn(&chain, "b", "2");
-    chain.memory[0].confidence = 0.1f;
-    chain.memory[1].confidence = 0.9f;
+    chain.memory[0].attributes.confidence = 0.1f;
+    chain.memory[1].attributes.confidence = 0.9f;
 
     const fossil_jellyfish_block_t *best = fossil_jellyfish_best_memory(&chain);
     ASSUME_ITS_TRUE(best != NULL);
-    ASSUME_ITS_EQUAL(best->confidence, 0.9f);
+    ASSUME_ITS_EQUAL_I32(best->attributes.confidence, 0.9f);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_knowledge_coverage_basic) {
@@ -298,7 +298,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_knowledge_coverage_basic) {
     fossil_jellyfish_init(&chain);
 
     float coverage_empty = fossil_jellyfish_knowledge_coverage(&chain);
-    ASSUME_ITS_EQUAL(coverage_empty, 0.0f);
+    ASSUME_ITS_EQUAL_I32(coverage_empty, 0.0f);
 
     fossil_jellyfish_learn(&chain, "foo", "bar");
     float coverage_nonempty = fossil_jellyfish_knowledge_coverage(&chain);
@@ -314,7 +314,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_detect_conflict) {
     ASSUME_ITS_TRUE(conflict != 0);
 
     int no_conflict = fossil_jellyfish_detect_conflict(&chain, "input", "output1");
-    ASSUME_ITS_EQUAL(no_conflict, 0);
+    ASSUME_ITS_EQUAL_I32(no_conflict, 0);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_reflect_prints_report) {
@@ -332,7 +332,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_verify_block_valid_and_invalid) {
     strcpy(block.io.input, "abc");
     strcpy(block.io.output, "def");
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
-        block.hash[i] = (uint8_t)(i + 1);
+        block.identity.hash[i] = (uint8_t)(i + 1);
 
     bool valid = fossil_jellyfish_verify_block(&block);
     ASSUME_ITS_TRUE(valid);
@@ -375,7 +375,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_trust_score_empty) {
     fossil_jellyfish_init(&chain);
 
     float score = fossil_jellyfish_chain_trust_score(&chain);
-    ASSUME_ITS_EQUAL(score, 0.0f);
+    ASSUME_ITS_EQUAL_I32(score, 0.0f);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_chain_trust_score_immutable_blocks) {
@@ -385,8 +385,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_trust_score_immutable_blocks) {
     fossil_jellyfish_learn(&chain, "core", "logic");
     fossil_jellyfish_learn(&chain, "aux", "data");
     fossil_jellyfish_mark_immutable(&chain.memory[0]);
-    chain.memory[0].confidence = 1.0f;
-    chain.memory[1].confidence = 0.5f;
+    chain.memory[0].attributes.confidence = 1.0f;
+    chain.memory[1].attributes.confidence = 0.5f;
 
     float score = fossil_jellyfish_chain_trust_score(&chain);
     ASSUME_ITS_TRUE(score > 0.0f && score <= 1.0f);
@@ -432,8 +432,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_best_match_returns_most_confident) {
 
     fossil_jellyfish_learn(&chain, "input", "first");
     fossil_jellyfish_learn(&chain, "input", "second");
-    chain.memory[0].confidence = 0.2f;
-    chain.memory[1].confidence = 0.9f;
+    chain.memory[0].attributes.confidence = 0.2f;
+    chain.memory[1].attributes.confidence = 0.9f;
 
     const fossil_jellyfish_block_t *best = fossil_jellyfish_best_match(&chain, "input");
     ASSUME_ITS_TRUE(best != NULL);
@@ -446,10 +446,10 @@ FOSSIL_TEST_CASE(c_test_jellyfish_redact_block_redacts_fields) {
     strcpy(block.io.input, "secret_input");
     strcpy(block.io.output, "secret_output");
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
-        block.hash[i] = (uint8_t)(i + 1);
+        block.identity.hash[i] = (uint8_t)(i + 1);
 
     int result = fossil_jellyfish_redact_block(&block);
-    ASSUME_ITS_EQUAL(result, 0);
+    ASSUME_ITS_EQUAL_I32(result, 0);
     ASSUME_ITS_TRUE(strstr(block.io.input, "REDACTED") != NULL);
     ASSUME_ITS_TRUE(strstr(block.io.output, "REDACTED") != NULL);
 }
@@ -537,10 +537,10 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_compact_moves_blocks) {
 FOSSIL_TEST_CASE(c_test_jellyfish_block_age_basic) {
     fossil_jellyfish_block_t block;
     memset(&block, 0, sizeof(block));
-    block.created_at = 1000000;
+    block.time.timestamp = 1000000;
     uint64_t now = 1005000;
     uint64_t age = fossil_jellyfish_block_age(&block, now);
-    ASSUME_ITS_EQUAL(age, 5000);
+    ASSUME_ITS_EQUAL_I32(age, 5000);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_block_explain_outputs_string) {
@@ -548,8 +548,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_block_explain_outputs_string) {
     memset(&block, 0, sizeof(block));
     strcpy(block.io.input, "explain_in");
     strcpy(block.io.output, "explain_out");
-    block.confidence = 0.75f;
-    block.usage = 42;
+    block.attributes.confidence = 0.75f;
     block.attributes.valid = 1;
     char buf[256] = {0};
     fossil_jellyfish_block_explain(&block, buf, sizeof(buf));
@@ -584,8 +583,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_clone_chain_copies_all_blocks) {
     fossil_jellyfish_init(&dst);
     fossil_jellyfish_learn(&src, "clone", "me");
     int result = fossil_jellyfish_clone_chain(&src, &dst);
-    ASSUME_ITS_EQUAL(result, 0);
-    ASSUME_ITS_EQUAL(src.count, dst.count);
+    ASSUME_ITS_EQUAL_I32(result, 0);
+    ASSUME_ITS_EQUAL_I32(src.count, dst.count);
     ASSUME_ITS_EQUAL_MEMORY(&src.memory[0], &dst.memory[0], sizeof(fossil_jellyfish_block_t));
 }
 
@@ -619,11 +618,11 @@ FOSSIL_TEST_CASE(c_test_jellyfish_block_sign_and_verify) {
     strcpy(block.io.input, "signme");
     strcpy(block.io.output, "signed");
     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
-        block.hash[i] = (uint8_t)(i + 1);
+        block.identity.hash[i] = (uint8_t)(i + 1);
     uint8_t priv_key[32] = {1};
     uint8_t pub_key[32] = {1};
     int sign_result = fossil_jellyfish_block_sign(&block, priv_key);
-    ASSUME_ITS_EQUAL(sign_result, 0);
+    ASSUME_ITS_EQUAL_I32(sign_result, 0);
     bool valid = fossil_jellyfish_block_verify_signature(&block, pub_key);
     ASSUME_ITS_TRUE(valid || !valid); // Accept both, as implementation may be stub
 }
