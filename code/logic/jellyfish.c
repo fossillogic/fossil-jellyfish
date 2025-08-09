@@ -904,43 +904,42 @@ int fossil_jellyfish_audit(const fossil_jellyfish_chain_t *chain) {
     return issues;
 }
 
-int fossil_jellyfish_prune(fossil_jellyfish_chain_t *chain, float min_confidence) {
-    if (!chain) return 0;
+int fossil_jellyfish_prune(fossil_jellyfish_chain_t *chain, float *min_conf) {
+    if (!chain || chain->count == 0 || !min_conf)
+        return 0;
+
     int pruned = 0;
+    int i = 0;
 
-    // Per-type minimum confidence thresholds (can be adjusted as needed)
-    const float min_conf[11] = {
-        min_confidence,         // UNKNOWN
-        min_confidence,         // OBSERVED
-        min_confidence + 0.05f, // INFERRED
-        min_confidence + 0.10f, // VALIDATED
-        min_confidence + 0.05f, // CORRECTED
-        min_confidence + 0.05f, // ASSUMED
-        min_confidence,         // RETRACTED
-        min_confidence + 0.10f, // EXPERIMENTAL
-        min_confidence + 0.05f, // GUIDED
-        min_confidence + 0.20f, // IMMUTABLE (rarely pruned)
-        min_confidence - 0.03f  // ARCHIVED (allow slightly lower)
-    };
-
-    for (size_t i = 0; i < chain->count; ) {
+    while (i < chain->count) {
         fossil_jellyfish_block_t *block = &chain->memory[i];
-        int t = (block->block_type >= 0 && block->block_type <= 10) ? block->block_type : 0;
+        int t = block->type;
 
-        // Only prune if not immutable and confidence below per-type threshold
-        if (!block->attributes.valid || block->attributes.immutable ||
-            block->attributes.confidence >= min_conf[t]) {
+        // 1. Skip immutable blocks entirely
+        if (block->attributes.immutable) {
             i++;
             continue;
         }
 
-        // Mark as pruned and invalid, then shift the rest down
-        block->attributes.pruned = 1;
-        block->attributes.valid = 0;
-        memmove(&chain->memory[i], &chain->memory[i + 1], sizeof(fossil_jellyfish_block_t) * (chain->count - i - 1));
-        chain->count--;
-        pruned++;
-        // Do not increment i, as we now have a new block at this index
+        // 2. If the block is invalid OR below confidence → prune it
+        if (!block->attributes.valid || block->attributes.confidence < min_conf[t]) {
+            block->attributes.pruned = 1;
+            block->attributes.valid = 0;
+
+            // Shift memory down to overwrite the pruned block
+            if (i < chain->count - 1) {
+                memmove(&chain->memory[i],
+                        &chain->memory[i + 1],
+                        sizeof(fossil_jellyfish_block_t) * (chain->count - i - 1));
+            }
+
+            chain->count--;
+            pruned++;
+            // Note: do NOT increment i here, because we need to check the new block at position i
+        } else {
+            // Keep the block → move to the next
+            i++;
+        }
     }
 
     return pruned;
