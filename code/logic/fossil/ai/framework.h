@@ -15,7 +15,6 @@
 #define FOSSIL_JELLYFISH_AI_FRAMEWORK_H
 
 #include "jellyfish.h"
-#include "jellydsl.h"
 #include "language.h"
 #include "iochat.h"
 
