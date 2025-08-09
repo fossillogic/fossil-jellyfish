@@ -317,6 +317,60 @@ void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
     memset(chain->memory, 0, sizeof(chain->memory));
 }
 
+void fossil_jellyfish_remove(fossil_jellyfish_chain_t *chain, size_t index) {
+    if (!chain || index >= FOSSIL_JELLYFISH_MAX_MEM) return;
+
+    fossil_jellyfish_block_t *block = &chain->memory[index];
+    if (block->attributes.valid) {
+        memset(block, 0, sizeof(fossil_jellyfish_block_t));
+        chain->count--;
+    }
+}
+
+fossil_jellyfish_block_t *fossil_jellyfish_find(fossil_jellyfish_chain_t *chain, const uint8_t *hash) {
+    if (!chain || !hash) return NULL;
+
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
+        fossil_jellyfish_block_t *block = &chain->memory[i];
+        if (block->attributes.valid && memcmp(block->identity.hash, hash, FOSSIL_JELLYFISH_HASH_SIZE) == 0) {
+            return block;
+        }
+    }
+    return NULL;
+}
+
+void fossil_jellyfish_update(fossil_jellyfish_chain_t *chain, size_t index, const char *input, const char *output) {
+    if (!chain || index >= FOSSIL_JELLYFISH_MAX_MEM) return;
+
+    fossil_jellyfish_block_t *block = &chain->memory[index];
+    if (block->attributes.valid) {
+        strncpy(block->io.input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+        block->io.input[FOSSIL_JELLYFISH_INPUT_SIZE - 1] = '\0';
+        strncpy(block->io.output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+        block->io.output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
+
+        block->io.input_len = strlen(block->io.input);
+        block->io.output_len = strlen(block->io.output);
+        block->time.updated_at = (uint64_t)time(NULL);
+    }
+}
+
+void fossil_jellyfish_update(fossil_jellyfish_chain_t *chain, size_t index, const char *input, const char *output) {
+    if (!chain || index >= FOSSIL_JELLYFISH_MAX_MEM) return;
+
+    fossil_jellyfish_block_t *block = &chain->memory[index];
+    if (block->attributes.valid) {
+        strncpy(block->io.input, input, FOSSIL_JELLYFISH_INPUT_SIZE - 1);
+        block->io.input[FOSSIL_JELLYFISH_INPUT_SIZE - 1] = '\0';
+        strncpy(block->io.output, output, FOSSIL_JELLYFISH_OUTPUT_SIZE - 1);
+        block->io.output[FOSSIL_JELLYFISH_OUTPUT_SIZE - 1] = '\0';
+
+        block->io.input_len = strlen(block->io.input);
+        block->io.output_len = strlen(block->io.output);
+        block->time.updated_at = (uint64_t)time(NULL);
+    }
+}
+
 void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, const char *output) {
     if (!chain || !input || !output) return;
 
