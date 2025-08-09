@@ -301,14 +301,6 @@ uint32_t crc32(const uint8_t *data, size_t length) {
 
 // Parsing utils
 
-static int write_all(FILE *f, const void *buf, size_t size) {
-    return fwrite(buf, 1, size, f) == size ? 0 : -1;
-}
-
-static int read_all(FILE *f, void *buf, size_t size) {
-    return fread(buf, 1, size, f) == size ? 0 : -1;
-}
-
 // Serialize the chain to a buffer. Returns number of bytes written, or 0 on error.
 size_t fossil_jellyfish_serialize_to_buffer(const fossil_jellyfish_chain_t *chain, uint8_t *buffer, size_t max_size) {
     if (!chain || !buffer || max_size == 0) return 0;
