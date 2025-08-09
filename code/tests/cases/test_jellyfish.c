@@ -151,7 +151,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_tokenize) {
-    char tokens[8][FOSSIL_JELLYFISH_TOKEN_SIZE] = {{0}};
+    char tokens[8][16] = {{0}};
     size_t n = fossil_jellyfish_tokenize("Hello, world! 123", tokens, 8);
     ASSUME_ITS_EQUAL_SIZE(n, 3);
     ASSUME_ITS_EQUAL_CSTR(tokens[0], "hello");
