@@ -67,7 +67,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_hash_consistency) {
     fossil_jellyfish_hash(input, output, hash1);
     fossil_jellyfish_hash(input, output, hash2);
 
-    ASSUME_ITS_EQUAL_CSTR(hash1, hash2);
+    ASSUME_ITS_TRUE(memcmp(hash1, hash2, sizeof(hash1)) == 0);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_hash_difference) {
@@ -137,8 +137,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_update_block) {
     ASSUME_ITS_TRUE(idx < FOSSIL_JELLYFISH_MAX_MEM);
 
     fossil_jellyfish_update(&chain, idx, "dog", "woof");
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[idx].io.input, "dog", 3);
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[idx].io.output, "woof", 4);
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[idx].io.input, "dog");
+    ASSUME_ITS_EQUAL_CSTR(chain.memory[idx].io.output, "woof");
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_remove_block) {
