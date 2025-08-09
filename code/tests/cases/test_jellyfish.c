@@ -67,7 +67,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_hash_consistency) {
     fossil_jellyfish_hash(input, output, hash1);
     fossil_jellyfish_hash(input, output, hash2);
 
-    ASSUME_ITS_EQUAL_CSTR(hash1, hash2, sizeof(hash1));
+    ASSUME_ITS_EQUAL_CSTR(hash1, hash2);
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_hash_difference) {
@@ -173,7 +173,7 @@ FOSSIL_TEST_CASE(c_test_jellyfish_save_and_load) {
 
     ASSUME_ITS_EQUAL_I32(chain.count, loaded.count);
     for (size_t i = 0; i < chain.count; ++i) {
-        ASSUME_ITS_EQUAL_CSTR(&chain.memory[i], &loaded.memory[i], sizeof(fossil_jellyfish_block_t));
+        ASSUME_ITS_EQUAL_CSTR(&chain.memory[i], &loaded.memory[i]);
     }
     remove(filepath);
 }
