@@ -406,6 +406,216 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, 
     }
 }
 
+static int write_all(FILE *f, const void *buf, size_t size) {
+    return fwrite(buf, 1, size, f) == size ? 0 : -1;
+}
+
+static int read_all(FILE *f, void *buf, size_t size) {
+    return fread(buf, 1, size, f) == size ? 0 : -1;
+}
+
+int fossil_jellyfish_save(const fossil_jellyfish_chain_t *chain, const char *filepath) {
+    FILE *f = fopen(filepath, "wb");
+    if (!f) return -1;
+
+    const char magic[9] = "JELLYFISH"; // 9 bytes no null terminator
+    if (write_all(f, magic, 9) != 0) {
+        fclose(f);
+        return -1;
+    }
+
+    uint32_t version = 1;
+    if (write_all(f, &version, sizeof(version)) != 0) {
+        fclose(f);
+        return -1;
+    }
+
+    if (write_all(f, &chain->count, sizeof(chain->count)) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (write_all(f, chain->device_id, FOSSIL_DEVICE_ID_SIZE) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (write_all(f, &chain->created_at, sizeof(chain->created_at)) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (write_all(f, &chain->updated_at, sizeof(chain->updated_at)) != 0) {
+        fclose(f);
+        return -1;
+    }
+
+    for (size_t i = 0; i < chain->count; i++) {
+        const fossil_jellyfish_block_t *block = &chain->memory[i];
+
+        if (write_all(f, block->io.input, FOSSIL_JELLYFISH_INPUT_SIZE) != 0 ||
+            write_all(f, block->io.output, FOSSIL_JELLYFISH_OUTPUT_SIZE) != 0 ||
+            write_all(f, &block->io.input_len, sizeof(block->io.input_len)) != 0 ||
+            write_all(f, &block->io.output_len, sizeof(block->io.output_len)) != 0 ||
+            write_all(f, block->io.input_tokens, sizeof(block->io.input_tokens)) != 0 ||
+            write_all(f, &block->io.input_token_count, sizeof(block->io.input_token_count)) != 0 ||
+            write_all(f, block->io.output_tokens, sizeof(block->io.output_tokens)) != 0 ||
+            write_all(f, &block->io.output_token_count, sizeof(block->io.output_token_count)) != 0 ||
+            write_all(f, &block->io.compressed, sizeof(block->io.compressed)) != 0 ||
+            write_all(f, &block->io.redacted, sizeof(block->io.redacted)) != 0 ||
+            write_all(f, &block->io.reserved, sizeof(block->io.reserved)) != 0 ||
+
+            write_all(f, block->identity.hash, FOSSIL_JELLYFISH_HASH_SIZE) != 0 ||
+            write_all(f, block->identity.device_id, FOSSIL_DEVICE_ID_SIZE) != 0 ||
+            write_all(f, block->identity.signature, FOSSIL_SIGNATURE_SIZE) != 0 ||
+            write_all(f, &block->identity.block_index, sizeof(block->identity.block_index)) != 0 ||
+            write_all(f, &block->identity.prev_block_index, sizeof(block->identity.prev_block_index)) != 0 ||
+            write_all(f, block->identity.prev_hash, FOSSIL_JELLYFISH_HASH_SIZE) != 0 ||
+            write_all(f, &block->identity.signature_len, sizeof(block->identity.signature_len)) != 0 ||
+            write_all(f, &block->identity.reserved, sizeof(block->identity.reserved)) != 0 ||
+
+            write_all(f, &block->time.timestamp, sizeof(block->time.timestamp)) != 0 ||
+            write_all(f, &block->time.delta_ms, sizeof(block->time.delta_ms)) != 0 ||
+            write_all(f, &block->time.duration_ms, sizeof(block->time.duration_ms)) != 0 ||
+            write_all(f, &block->time.updated_at, sizeof(block->time.updated_at)) != 0 ||
+            write_all(f, &block->time.expires_at, sizeof(block->time.expires_at)) != 0 ||
+            write_all(f, &block->time.validated_at, sizeof(block->time.validated_at)) != 0 ||
+
+            write_all(f, &block->attributes, sizeof(block->attributes)) != 0 ||
+
+            write_all(f, &block->block_type, sizeof(block->block_type)) != 0 ||
+
+            write_all(f, &block->classify.derived_from_index, sizeof(block->classify.derived_from_index)) != 0 ||
+
+            write_all(f, block->classify.cross_refs, sizeof(block->classify.cross_refs)) != 0 ||
+            write_all(f, &block->classify.cross_ref_count, sizeof(block->classify.cross_ref_count)) != 0 ||
+
+            write_all(f, block->classify.forward_refs, sizeof(block->classify.forward_refs)) != 0 ||
+            write_all(f, &block->classify.forward_ref_count, sizeof(block->classify.forward_ref_count)) != 0 ||
+
+            write_all(f, &block->classify.reasoning_depth, sizeof(block->classify.reasoning_depth)) != 0 ||
+            write_all(f, &block->classify.reserved, sizeof(block->classify.reserved)) != 0 ||
+
+            write_all(f, block->classify.classification_reason, sizeof(block->classify.classification_reason)) != 0 ||
+            write_all(f, block->classify.tags, sizeof(block->classify.tags)) != 0 ||
+
+            write_all(f, &block->classify.similarity_score, sizeof(block->classify.similarity_score)) != 0 ||
+            write_all(f, &block->classify.is_hallucinated, sizeof(block->classify.is_hallucinated)) != 0 ||
+            write_all(f, &block->classify.is_contradicted, sizeof(block->classify.is_contradicted)) != 0) 
+        {
+            fclose(f);
+            return -1;
+        }
+    }
+
+    fclose(f);
+    return 0;
+}
+
+int fossil_jellyfish_load(fossil_jellyfish_chain_t *chain, const char *filepath) {
+    FILE *f = fopen(filepath, "rb");
+    if (!f) return -1;
+
+    char magic[10] = {0};
+    if (read_all(f, magic, 9) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (strncmp(magic, "JELLYFISH", 9) != 0) {
+        fclose(f);
+        return -2;
+    }
+
+    uint32_t version = 0;
+    if (read_all(f, &version, sizeof(version)) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (version != 1) {
+        fclose(f);
+        return -3;
+    }
+
+    if (read_all(f, &chain->count, sizeof(chain->count)) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (chain->count > FOSSIL_JELLYFISH_MAX_MEM) {
+        fclose(f);
+        return -4;
+    }
+    if (read_all(f, chain->device_id, FOSSIL_DEVICE_ID_SIZE) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (read_all(f, &chain->created_at, sizeof(chain->created_at)) != 0) {
+        fclose(f);
+        return -1;
+    }
+    if (read_all(f, &chain->updated_at, sizeof(chain->updated_at)) != 0) {
+        fclose(f);
+        return -1;
+    }
+
+    for (size_t i = 0; i < chain->count; i++) {
+        fossil_jellyfish_block_t *block = &chain->memory[i];
+
+        if (read_all(f, block->io.input, FOSSIL_JELLYFISH_INPUT_SIZE) != 0 ||
+            read_all(f, block->io.output, FOSSIL_JELLYFISH_OUTPUT_SIZE) != 0 ||
+            read_all(f, &block->io.input_len, sizeof(block->io.input_len)) != 0 ||
+            read_all(f, &block->io.output_len, sizeof(block->io.output_len)) != 0 ||
+            read_all(f, block->io.input_tokens, sizeof(block->io.input_tokens)) != 0 ||
+            read_all(f, &block->io.input_token_count, sizeof(block->io.input_token_count)) != 0 ||
+            read_all(f, block->io.output_tokens, sizeof(block->io.output_tokens)) != 0 ||
+            read_all(f, &block->io.output_token_count, sizeof(block->io.output_token_count)) != 0 ||
+            read_all(f, &block->io.compressed, sizeof(block->io.compressed)) != 0 ||
+            read_all(f, &block->io.redacted, sizeof(block->io.redacted)) != 0 ||
+            read_all(f, &block->io.reserved, sizeof(block->io.reserved)) != 0 ||
+
+            read_all(f, block->identity.hash, FOSSIL_JELLYFISH_HASH_SIZE) != 0 ||
+            read_all(f, block->identity.device_id, FOSSIL_DEVICE_ID_SIZE) != 0 ||
+            read_all(f, block->identity.signature, FOSSIL_SIGNATURE_SIZE) != 0 ||
+            read_all(f, &block->identity.block_index, sizeof(block->identity.block_index)) != 0 ||
+            read_all(f, &block->identity.prev_block_index, sizeof(block->identity.prev_block_index)) != 0 ||
+            read_all(f, block->identity.prev_hash, FOSSIL_JELLYFISH_HASH_SIZE) != 0 ||
+            read_all(f, &block->identity.signature_len, sizeof(block->identity.signature_len)) != 0 ||
+            read_all(f, &block->identity.reserved, sizeof(block->identity.reserved)) != 0 ||
+
+            read_all(f, &block->time.timestamp, sizeof(block->time.timestamp)) != 0 ||
+            read_all(f, &block->time.delta_ms, sizeof(block->time.delta_ms)) != 0 ||
+            read_all(f, &block->time.duration_ms, sizeof(block->time.duration_ms)) != 0 ||
+            read_all(f, &block->time.updated_at, sizeof(block->time.updated_at)) != 0 ||
+            read_all(f, &block->time.expires_at, sizeof(block->time.expires_at)) != 0 ||
+            read_all(f, &block->time.validated_at, sizeof(block->time.validated_at)) != 0 ||
+
+            read_all(f, &block->attributes, sizeof(block->attributes)) != 0 ||
+
+            read_all(f, &block->block_type, sizeof(block->block_type)) != 0 ||
+
+            read_all(f, &block->classify.derived_from_index, sizeof(block->classify.derived_from_index)) != 0 ||
+
+            read_all(f, block->classify.cross_refs, sizeof(block->classify.cross_refs)) != 0 ||
+            read_all(f, &block->classify.cross_ref_count, sizeof(block->classify.cross_ref_count)) != 0 ||
+
+            read_all(f, block->classify.forward_refs, sizeof(block->classify.forward_refs)) != 0 ||
+            read_all(f, &block->classify.forward_ref_count, sizeof(block->classify.forward_ref_count)) != 0 ||
+
+            read_all(f, &block->classify.reasoning_depth, sizeof(block->classify.reasoning_depth)) != 0 ||
+            read_all(f, &block->classify.reserved, sizeof(block->classify.reserved)) != 0 ||
+
+            read_all(f, block->classify.classification_reason, sizeof(block->classify.classification_reason)) != 0 ||
+            read_all(f, block->classify.tags, sizeof(block->classify.tags)) != 0 ||
+
+            read_all(f, &block->classify.similarity_score, sizeof(block->classify.similarity_score)) != 0 ||
+            read_all(f, &block->classify.is_hallucinated, sizeof(block->classify.is_hallucinated)) != 0 ||
+            read_all(f, &block->classify.is_contradicted, sizeof(block->classify.is_contradicted)) != 0) 
+        {
+            fclose(f);
+            return -1;
+        }
+    }
+
+    fclose(f);
+    return 0;
+}
+
 void fossil_jellyfish_cleanup(fossil_jellyfish_chain_t *chain) {
     // Remove invalid or low-confidence blocks and compact the memory array.
     if (!chain) return;
