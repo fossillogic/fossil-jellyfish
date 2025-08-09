@@ -205,6 +205,47 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
 void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain);
 
 /**
+ * Learn a new input-output pair.
+ * This adds a new block to the chain with the given input and output.
+ * 
+ * @param chain Pointer to the jellyfish chain.
+ * @param input The input string to learn.
+ * @param output The output string corresponding to the input.
+ */
+void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, const char *output);
+
+/**
+ * Find a block by its hash.
+ * This searches the chain for a block with the given hash.
+ * 
+ * @param chain Pointer to the jellyfish chain.
+ * @param hash The hash to search for.
+ * @return Pointer to the found block, or NULL if not found.
+ */
+void fossil_jellyfish_remove(fossil_jellyfish_chain_t *chain, size_t index);
+
+/**
+ * Find a block by its hash.
+ * This searches the chain for a block with the given hash.
+ * 
+ * @param chain Pointer to the jellyfish chain.
+ * @param hash The hash to search for.
+ * @return Pointer to the found block, or NULL if not found.
+ */
+fossil_jellyfish_block_t *fossil_jellyfish_find(fossil_jellyfish_chain_t *chain, const uint8_t *hash);
+
+/**
+ * Update an existing block in the jellyfish chain.
+ * This modifies the input and output of a specific block.
+ * 
+ * @param chain Pointer to the jellyfish chain.
+ * @param index The index of the block to update.
+ * @param input The new input string.
+ * @param output The new output string.
+ */
+void fossil_jellyfish_update(fossil_jellyfish_chain_t *chain, size_t index, const char *input, const char *output);
+
+/**
  * @brief Save a Jellyfish chain to a binary file.
  *
  * The function writes a fixed-format binary serialization of the entire chain,
@@ -259,16 +300,6 @@ int fossil_jellyfish_audit(const fossil_jellyfish_chain_t *chain);
  * @return Number of blocks pruned.
  */
 int fossil_jellyfish_prune(fossil_jellyfish_chain_t *chain, float min_confidence);
-
-/**
- * Learn a new input-output pair.
- * This adds a new block to the chain with the given input and output.
- * 
- * @param chain Pointer to the jellyfish chain.
- * @param input The input string to learn.
- * @param output The output string corresponding to the input.
- */
-void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, const char *output);
 
 /**
  * Reason about an input.
