@@ -205,6 +205,30 @@ void fossil_jellyfish_hash(const char *input, const char *output, uint8_t *hash_
 void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain);
 
 /**
+ * @brief Save a Jellyfish chain to a binary file.
+ *
+ * The function writes a fixed-format binary serialization of the entire chain,
+ * including a magic header and version number for format validation.
+ *
+ * @param chain Pointer to the Jellyfish chain structure to serialize.
+ * @param filepath File path where to save the binary data.
+ * @return 0 on success, negative value on failure.
+ */
+int fossil_jellyfish_save(const fossil_jellyfish_chain_t *chain, const char *filepath);
+
+/**
+ * @brief Load a Jellyfish chain from a binary file.
+ *
+ * The function reads a fixed-format binary serialization and reconstructs
+ * the entire chain, verifying the magic header and version.
+ *
+ * @param chain Pointer to the Jellyfish chain structure to populate.
+ * @param filepath File path from which to load the binary data.
+ * @return 0 on success, negative value on failure.
+ */
+int fossil_jellyfish_load(fossil_jellyfish_chain_t *chain, const char *filepath);
+
+/**
  * Cleanup the jellyfish chain.
  * This removes old or invalid blocks from the chain to reclaim space.
  * 
