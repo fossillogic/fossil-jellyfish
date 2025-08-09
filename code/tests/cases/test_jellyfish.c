@@ -173,7 +173,8 @@ FOSSIL_TEST_CASE(c_test_jellyfish_save_and_load) {
 
     ASSUME_ITS_EQUAL_I32(chain.count, loaded.count);
     for (size_t i = 0; i < chain.count; ++i) {
-        ASSUME_ITS_EQUAL_CSTR(&chain.memory[i], &loaded.memory[i]);
+        ASSUME_ITS_EQUAL_CSTR(chain.memory[i].io.input, loaded.memory[i].io.input);
+        ASSUME_ITS_EQUAL_CSTR(chain.memory[i].io.output, loaded.memory[i].io.output);
     }
     remove(filepath);
 }
@@ -269,14 +270,14 @@ FOSSIL_TEST_CASE(c_test_jellyfish_decay_confidence) {
     ASSUME_ITS_TRUE(chain.memory[0].attributes.confidence < 1.0f);
     ASSUME_ITS_TRUE(chain.memory[0].attributes.confidence > 0.0f);
 }
-
 FOSSIL_TEST_CASE(c_test_jellyfish_tokenize_basic) {
-    char tokens[8][FOSSIL_JELLYFISH_TOKEN_SIZE];
+    char tokens[8][16];
     size_t n = fossil_jellyfish_tokenize("Hello, world! This is a test.", tokens, 8);
 
     ASSUME_ITS_TRUE(n > 0);
     ASSUME_ITS_EQUAL_CSTR(tokens[0], "hello");
     ASSUME_ITS_EQUAL_CSTR(tokens[1], "world");
+}
 }
 
 FOSSIL_TEST_CASE(c_test_jellyfish_best_memory_returns_highest_confidence) {
@@ -630,7 +631,6 @@ FOSSIL_TEST_CASE(c_test_jellyfish_block_sign_and_verify) {
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
 FOSSIL_TEST_GROUP(c_jellyfish_tests) {    
-    // Generic ToFu Fixture
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_hash_basic);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_hash_consistency);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_hash_difference);
@@ -644,9 +644,40 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_audit_detects_duplicate_hash);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_prune_low_confidence);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_returns_output);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_returns_unknown);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_dump_prints_chain);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_decay_confidence);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_tokenize_basic);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_best_memory_returns_highest_confidence);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_knowledge_coverage_basic);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_detect_conflict);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reflect_prints_report);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_verify_block_valid_and_invalid);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_validation_report_prints);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_verify_chain_all_valid);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_verify_chain_with_invalid_block);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_trust_score_empty);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_trust_score_immutable_blocks);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_mark_immutable_sets_flag);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_deduplicate_chain_removes_duplicates);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_compress_chain_trims_whitespace);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_best_match_returns_most_confident);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_redact_block_redacts_fields);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_stats_basic);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_compare_chains_detects_difference);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_fingerprint_changes_on_update);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_trim_reduces_block_count);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_compact_moves_blocks);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_age_basic);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_explain_outputs_string);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_finds_block);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_returns_null_for_missing);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_clone_chain_copies_all_blocks);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_match);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_false_for_no_match);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_sign_and_verify);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_sign_and_verify);
+    
 
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
 } // end of tests
