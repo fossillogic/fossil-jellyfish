@@ -725,7 +725,7 @@ void fossil_jellyfish_cleanup(fossil_jellyfish_chain_t *chain) {
 }
 
 int fossil_jellyfish_audit(const fossil_jellyfish_chain_t *chain) {
-    if (!chain) return -1;
+    if (!chain->memory && chain->count > 0) return -1;
 
     int issues = 0;
 
