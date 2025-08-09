@@ -611,334 +611,387 @@ namespace ai {
     // C++ wrapper for the jellyfish AI
     class Jellyfish {
     public:
-        /** Constructor */
-        Jellyfish() { fossil_jellyfish_init(&chain_); }
-
-        /** Destructor */
-        ~Jellyfish() { fossil_jellyfish_cleanup(&chain_); }
-
         /**
-         * @brief Hashes an input-output pair.
-         * This computes a hash based on the input and output strings.
+         * @brief Generates a hash for the given input and output.
+         *
          * @param input The input string to hash.
          * @param output The output string to hash.
-         * @return The computed hash as a 32-byte array.
+         * @param hash_out Pointer to an array where the resulting hash will be stored.
          */
-        std::array<uint8_t, 32> hash(const std::string& input, const std::string& output) {
-            std::array<uint8_t, 32> hash_result;
-            fossil_jellyfish_hash(input.c_str(), output.c_str(), hash_result.data());
-            return hash_result;
+        static void hash(const char* input, const char* output, uint8_t* hash_out) {
+            ::fossil_jellyfish_hash(input, output, hash_out);
         }
 
         /**
-         * @brief Learn a new input-output pair.
-         * 
-         * This adds a new block to the chain with the given input and output.
-         * 
+         * @brief Initializes the jellyfish chain.
+         */
+        void init() {
+            ::fossil_jellyfish_init(&chain_);
+        }
+
+        /**
+         * @brief Learns a new input-output pair.
+         *
          * @param input The input string to learn.
          * @param output The output string corresponding to the input.
          */
-        void learn(const std::string& input, const std::string& output) {
-            fossil_jellyfish_learn(&chain_, input.c_str(), output.c_str());
+        void learn(const char* input, const char* output) {
+            ::fossil_jellyfish_learn(&chain_, input, output);
         }
 
         /**
-         * @brief Reason about an input string.
-         * 
-         * This attempts to find a matching output for the given input.
-         * 
-         * @param input The input string to reason about.
-         * @return The matching output string, or "Unknown" if not found.
+         * @brief Removes a block at the specified index.
+         *
+         * @param index The index of the block to remove.
          */
-        std::string reason(const std::string& input) {
-            const char* result = fossil_jellyfish_reason(&chain_, input.c_str());
-            return result ? std::string(result) : std::string("Unknown");
+        void remove(size_t index) {
+            ::fossil_jellyfish_remove(&chain_, index);
         }
 
         /**
-         * @brief Dumps the current state of the Jellyfish chain.
-         * This prints the contents of the chain to standard output.
-         * @note Useful for debugging and inspection.
+         * @brief Finds a block by its hash.
+         *
+         * @param hash The hash to search for.
+         * @return Pointer to the found block, or nullptr if not found.
+         */
+        fossil_jellyfish_block_t* find(const uint8_t* hash) {
+            return ::fossil_jellyfish_find(&chain_, hash);
+        }
+
+        /**
+         * @brief Updates an existing block in the jellyfish chain.
+         *
+         * @param index The index of the block to update.
+         * @param input The new input string.
+         * @param output The new output string.
+         */
+        void update(size_t index, const char* input, const char* output) {
+            ::fossil_jellyfish_update(&chain_, index, input, output);
+        }
+
+        /**
+         * @brief Saves the Jellyfish chain to a binary file.
+         *
+         * @param filepath File path where to save the binary data.
+         * @return 0 on success, negative value on failure.
+         */
+        int save(const char* filepath) const {
+            return ::fossil_jellyfish_save(&chain_, filepath);
+        }
+
+        /**
+         * @brief Loads the Jellyfish chain from a binary file.
+         *
+         * @param filepath File path from which to load the binary data.
+         * @return 0 on success, negative value on failure.
+         */
+        int load(const char* filepath) {
+            return ::fossil_jellyfish_load(&chain_, filepath);
+        }
+
+        /**
+         * @brief Cleans up the jellyfish chain by removing old or invalid blocks.
+         */
+        void cleanup() {
+            ::fossil_jellyfish_cleanup(&chain_);
+        }
+
+        /**
+         * @brief Audits the jellyfish chain for anomalies or inconsistencies.
+         *
+         * @return Number of issues detected.
+         */
+        int audit() const {
+            return ::fossil_jellyfish_audit(&chain_);
+        }
+
+        /**
+         * @brief Prunes the jellyfish chain by removing invalid, expired, or low-confidence blocks.
+         *
+         * @param min_confidence Minimum confidence required to retain a block.
+         * @return Number of blocks pruned.
+         */
+        int prune(float min_confidence) {
+            return ::fossil_jellyfish_prune(&chain_, min_confidence);
+        }
+
+        /**
+         * @brief Reasons about an input and returns the corresponding output.
+         *
+         * @param input The input string to reason about.
+         * @return The output string if found, or "Unknown" if not found.
+         */
+        const char* reason(const char* input) {
+            return ::fossil_jellyfish_reason(&chain_, input);
+        }
+
+        /**
+         * @brief Dumps the contents of the jellyfish chain to standard output.
          */
         void dump() const {
-            fossil_jellyfish_dump(&chain_);
+            ::fossil_jellyfish_dump(&chain_);
         }
 
         /**
-         * @brief Decays the confidence of all blocks in the chain.
-         * 
-         * This reduces the confidence of all blocks by a specified decay rate.
-         * 
+         * @brief Decays the confidence of all blocks in the jellyfish chain.
+         *
          * @param decay_rate The rate at which to decay confidence (0.0 - 1.0).
          */
         void decay_confidence(float decay_rate) {
-            fossil_jellyfish_decay_confidence(&chain_, decay_rate);
+            ::fossil_jellyfish_decay_confidence(&chain_, decay_rate);
         }
 
         /**
-         * @brief Tokenizes an input string into lowercase word tokens.
-         * 
-         * @param input The input string to tokenize.
-         * @param tokens Output vector to store the tokens.
-         * @return The number of tokens extracted.
+         * @brief Tokenizes a given input string into lowercase word tokens.
+         *
+         * @param input       Null-terminated string to tokenize.
+         * @param tokens      2D array to store output tokens (each max FOSSIL_JELLYFISH_TOKEN_SIZE).
+         * @param max_tokens  Maximum number of tokens to extract.
+         * @return            The number of tokens actually written to the tokens array.
          */
-        size_t tokenize(const std::string& input, std::vector<std::string>& tokens) const {
-            char token_buf[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE] = {};
-            size_t n = fossil_jellyfish_tokenize(input.c_str(), token_buf, FOSSIL_JELLYFISH_MAX_TOKENS);
-            tokens.clear();
-            for (size_t i = 0; i < n; ++i)
-                tokens.emplace_back(token_buf[i]);
-            return n;
+        size_t tokenize(const char* input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens) const {
+            return ::fossil_jellyfish_tokenize(input, tokens, max_tokens);
         }
 
         /**
-         * @brief Returns the best memory block in the chain based on confidence.
-         * 
-         * @return Pointer to the best memory block, or NULL if no valid blocks exist.
+         * @brief Returns a pointer to the memory block in the chain with the highest confidence score.
+         *
+         * @return Pointer to the best fossil_jellyfish_block_t, or nullptr if no valid memory exists.
          */
         const fossil_jellyfish_block_t* best_memory() const {
-            return fossil_jellyfish_best_memory(&chain_);
+            return ::fossil_jellyfish_best_memory(&chain_);
         }
 
         /**
-         * @brief Returns the knowledge coverage of the chain.
-         * 
-         * @return The knowledge coverage as a float (0.0 - 1.0).
+         * @brief Calculates a normalized score representing how "full" or utilized the knowledge base is.
+         *
+         * @return Float between 0.0 and 1.0 indicating knowledge coverage.
          */
         float knowledge_coverage() const {
-            return fossil_jellyfish_knowledge_coverage(&chain_);
+            return ::fossil_jellyfish_knowledge_coverage(&chain_);
         }
 
         /**
-         * @brief Detects if adding a given input-output pair would conflict with existing memory.
-         * 
-         * @param input The input string to check.
-         * @param output The output string to check.
-         * @return 1 if a conflict is found, 0 otherwise.
+         * @brief Checks if adding a given input-output pair would contradict existing memory.
+         *
+         * @param input   Input to check.
+         * @param output  Output to check.
+         * @return        1 if a conflict is found, 0 otherwise.
          */
-        int detect_conflict(const std::string& input, const std::string& output) const {
-            return fossil_jellyfish_detect_conflict(&chain_, input.c_str(), output.c_str());
+        int detect_conflict(const char* input, const char* output) const {
+            return ::fossil_jellyfish_detect_conflict(&chain_, input, output);
         }
 
         /**
-         * @brief Reflects on the current state of the Jellyfish chain.
-         * 
-         * This prints a self-reflection report to standard output.
+         * @brief Prints a self-reflection report of the current memory chain to stdout.
          */
         void reflect() const {
-            fossil_jellyfish_reflect(&chain_);
+            ::fossil_jellyfish_reflect(&chain_);
         }
 
         /**
-         * @brief Verifies the integrity of a memory block.
-         * 
-         * @param block Pointer to the memory block to verify.
+         * @brief Verifies the integrity of a jellyfish block.
+         *
+         * @param block Pointer to the jellyfish block to verify.
          * @return True if the block is valid, false otherwise.
          */
-        bool verify_block(const fossil_jellyfish_block_t* block) const {
-            return fossil_jellyfish_verify_block(block);
+        static bool verify_block(const fossil_jellyfish_block_t* block) {
+            return ::fossil_jellyfish_verify_block(block);
         }
 
         /**
-         * @brief Prints a validation report for the Jellyfish chain.
-         * 
-         * This outputs the status of each block in the chain to standard output.
+         * @brief Prints a validation report for each memory block in the Jellyfish chain.
          */
         void validation_report() const {
-            fossil_jellyfish_validation_report(&chain_);
+            ::fossil_jellyfish_validation_report(&chain_);
         }
 
         /**
-         * @brief Verifies the integrity of the Jellyfish chain.
-         * 
-         * @return True if the chain is valid, false otherwise.
+         * @brief Performs full-chain validation by verifying each block.
+         *
+         * @return true if all blocks pass verification, false otherwise.
          */
         bool verify_chain() const {
-            return fossil_jellyfish_verify_chain(&chain_);
+            return ::fossil_jellyfish_verify_chain(&chain_);
         }
 
         /**
-         * @brief Returns the trust score of the Jellyfish chain.
-         * 
-         * @return The trust score as a float (0.0 - 1.0).
+         * @brief Computes a normalized trust score for the Jellyfish chain.
+         *
+         * @return Trust score (0.0f to 1.0f), or 0.0f if the chain is null or has no valid entries.
          */
-        float trust_score() const {
-            return fossil_jellyfish_chain_trust_score(&chain_);
+        float chain_trust_score() const {
+            return ::fossil_jellyfish_chain_trust_score(&chain_);
         }
 
         /**
-         * @brief Marks a memory block as immutable.
-         * 
+         * @brief Marks a Jellyfish memory block as immutable.
+         *
          * @param block Pointer to the memory block to mark as immutable.
          */
-        void mark_immutable(fossil_jellyfish_block_t* block) {
-            fossil_jellyfish_mark_immutable(block);
+        static void mark_immutable(fossil_jellyfish_block_t* block) {
+            ::fossil_jellyfish_mark_immutable(block);
         }
 
         /**
          * @brief Deduplicates blocks with identical input/output pairs.
-         * 
          * @return Number of duplicates removed.
          */
         int deduplicate_chain() {
-            return fossil_jellyfish_deduplicate_chain(&chain_);
+            return ::fossil_jellyfish_deduplicate_chain(&chain_);
         }
 
         /**
-         * @brief Compresses the memory chain by trimming whitespace and shrinking fields.
-         * 
+         * @brief Compresses the memory chain by trimming whitespace and optionally shrinking fields.
          * @return Number of blocks modified.
          */
         int compress_chain() {
-            return fossil_jellyfish_compress_chain(&chain_);
+            return ::fossil_jellyfish_compress_chain(&chain_);
         }
 
         /**
-         * @brief Finds the best matching memory block for a given input string.
-         * 
+         * @brief Finds the best matching memory block in the chain for a given input string.
          * @param input The input string to match.
-         * @return Pointer to the best matching block, or NULL if not found.
+         * @return Pointer to the best matching block, or nullptr if none found.
          */
-        const fossil_jellyfish_block_t* best_match(const std::string& input) const {
-            return fossil_jellyfish_best_match(&chain_, input.c_str());
+        const fossil_jellyfish_block_t* best_match(const char* input) const {
+            return ::fossil_jellyfish_best_match(&chain_, input);
         }
 
         /**
-         * @brief Redacts sensitive information from a memory block.
-         * 
-         * @param block Pointer to the memory block to redact.
-         * @return Number of fields redacted.
+         * @brief Redacts sensitive data in a memory block while retaining structural integrity.
+         * @param block Pointer to the block to redact.
+         * @return 0 on success, non-zero on error.
          */
-        int redact_block(fossil_jellyfish_block_t* block) {
-            return fossil_jellyfish_redact_block(block);
+        static int redact_block(fossil_jellyfish_block_t* block) {
+            return ::fossil_jellyfish_redact_block(block);
         }
 
         /**
          * @brief Computes statistics over the Jellyfish chain.
-         * 
-         * Populates output arrays with valid count, average confidence, and immutable ratio.
-         * 
-         * @param out_valid_count Array to store valid block counts for each type.
-         * @param out_avg_confidence Array to store average confidence for each type.
-         * @param out_immutable_ratio Array to store immutable block ratios for each type.
+         *
+         * Populates out parameters with stats like count, valid count, confidence mean,
+         * trust score, block age distribution, and immutable ratio.
+         *
+         * @param out_valid_count Pointer to store number of valid blocks.
+         * @param out_avg_confidence Pointer to store average confidence score.
+         * @param out_immutable_ratio Pointer to store immutable block ratio.
          */
         void chain_stats(size_t out_valid_count[5], float out_avg_confidence[5], float out_immutable_ratio[5]) const {
-            fossil_jellyfish_chain_stats(&chain_, out_valid_count, out_avg_confidence, out_immutable_ratio);
+            ::fossil_jellyfish_chain_stats(&chain_, out_valid_count, out_avg_confidence, out_immutable_ratio);
         }
 
         /**
-         * @brief Compares the current Jellyfish chain with another.
-         * 
-         * @param other The other Jellyfish chain to compare against.
-         * @return An integer indicating the result of the comparison.
+         * @brief Compares this Jellyfish chain with another and identifies block-level differences.
+         *
+         * @param other The other Jellyfish chain to compare with.
+         * @return Number of differing blocks, or -1 on error.
          */
         int compare_chains(const Jellyfish& other) const {
-            return fossil_jellyfish_compare_chains(&chain_, &other.chain_);
+            return ::fossil_jellyfish_compare_chains(&chain_, &other.chain_);
         }
 
         /**
-         * @brief Computes a fingerprint hash for the entire Jellyfish chain.
-         * 
-         * @param out_hash Output buffer to store the resulting hash.
+         * @brief Computes a single fingerprint hash for the entire chain.
+         *
+         * @param out_hash Output buffer of FOSSIL_JELLYFISH_HASH_SIZE bytes.
          */
-        void chain_fingerprint(uint8_t* out_hash) const {
-            fossil_jellyfish_chain_fingerprint(&chain_, out_hash);
+        void chain_fingerprint(uint8_t *out_hash) const {
+            ::fossil_jellyfish_chain_fingerprint(&chain_, out_hash);
         }
 
         /**
-         * @brief Trims the chain to a maximum number of blocks.
-         * 
-         * @param max_blocks The maximum number of blocks to retain.
-         * @return The number of blocks removed.
+         * @brief Trims the chain to retain only the N most recently used or most confident blocks.
+         *
+         * @param max_blocks Number of blocks to retain.
+         * @return Number of blocks removed.
          */
         int trim(size_t max_blocks) {
-            return fossil_jellyfish_trim(&chain_, max_blocks);
+            return ::fossil_jellyfish_trim(&chain_, max_blocks);
         }
 
         /**
-         * @brief Compacts the memory chain by merging adjacent blocks.
-         * 
-         * @return The number of blocks merged.
+         * @brief Reorders valid blocks to the front of the chain and removes gaps.
+         *
+         * @return Number of blocks moved.
          */
         int chain_compact() {
-            return fossil_jellyfish_chain_compact(&chain_);
+            return ::fossil_jellyfish_chain_compact(&chain_);
         }
 
         /**
-         * @brief Computes the age of a block relative to the current time.
-         * 
-         * @param block The memory block to check.
-         * @param now Current UNIX timestamp.
-         * @return The age of the block in milliseconds.
+         * @brief Computes the age of a block relative to current time.
+         *
+         * @param block The memory block.
+         * @param now   Current UNIX timestamp.
+         * @return      Age in milliseconds.
          */
-        uint64_t block_age(const fossil_jellyfish_block_t* block, uint64_t now) const {
-            return fossil_jellyfish_block_age(block, now);
+        static uint64_t block_age(const fossil_jellyfish_block_t* block, uint64_t now) {
+            return ::fossil_jellyfish_block_age(block, now);
         }
 
         /**
-         * @brief Explains the contents of a memory block.
-         * 
-         * @param block The memory block to explain.
-         * @param out Output buffer to store the explanation.
-         * @param size Size of the output buffer.
+         * @brief Returns a short diagnostic string for a block.
+         *
+         * @param block The block to describe.
+         * @param out   Output buffer.
+         * @param size  Size of the buffer.
          */
-        void block_explain(const fossil_jellyfish_block_t* block, char* out, size_t size) const {
-            fossil_jellyfish_block_explain(block, out, size);
+        static void block_explain(const fossil_jellyfish_block_t* block, char* out, size_t size) {
+            ::fossil_jellyfish_block_explain(block, out, size);
         }
 
         /**
          * @brief Finds a memory block by its hash.
-         * 
-         * @param hash The hash to search for.
-         * @return Pointer to the matching block, or NULL if not found.
+         *
+         * @param hash  The 32-byte hash to search for.
+         * @return Pointer to the matching block, or nullptr.
          */
         const fossil_jellyfish_block_t* find_by_hash(const uint8_t* hash) const {
-            return fossil_jellyfish_find_by_hash(&chain_, hash);
+            return ::fossil_jellyfish_find_by_hash(&chain_, hash);
         }
 
         /**
-         * @brief Creates a deep copy of the Jellyfish chain.
-         * 
-         * @param dst The destination Jellyfish object to copy into.
+         * @brief Creates a deep copy of a Jellyfish chain.
+         *
+         * @param dst Destination chain.
          * @return 0 on success, non-zero on error.
          */
         int clone_chain(Jellyfish& dst) const {
-            return fossil_jellyfish_clone_chain(&chain_, &dst.chain_);
+            return ::fossil_jellyfish_clone_chain(&chain_, &dst.chain_);
         }
 
         /**
-         * @brief Reasons about the input and provides a verbose output.
-         * 
-         * @param input The input string to reason about.
-         * @param out_output Output buffer for the verbose explanation.
-         * @param out_confidence Output buffer for the confidence score.
-         * @param out_block Output buffer for the relevant memory block.
-         * @return True if successful, false otherwise.
+         * @brief Like `reason`, but includes match confidence, source block, and hash.
+         *
+         * @param input         Input string to reason with.
+         * @param out_output    Output string buffer.
+         * @param out_confidence Optional confidence return pointer.
+         * @param out_block     Optional pointer to store matching block.
+         * @return True if a match was found, false otherwise.
          */
-        bool reason_verbose(const std::string& input, char* out_output, float* out_confidence, const fossil_jellyfish_block_t** out_block) const {
-            return fossil_jellyfish_reason_verbose(&chain_, input.c_str(), out_output, out_confidence, out_block);
+        bool reason_verbose(const char* input, char* out_output, float* out_confidence, const fossil_jellyfish_block_t** out_block) const {
+            return ::fossil_jellyfish_reason_verbose(&chain_, input, out_output, out_confidence, out_block);
         }
 
         /**
-         * @brief Signs a memory block with a private key.
-         * 
-         * @param block The memory block to sign.
-         * @param priv_key The private key to use for signing.
-         * @return 0 on success, non-zero on error.
+         * @brief Signs a Jellyfish block using a private key.
+         * @param block The block to sign.
+         * @param priv_key The private key (implementation-defined).
+         * @return 0 on success.
          */
-        int block_sign(fossil_jellyfish_block_t* block, const uint8_t* priv_key) {
-            return fossil_jellyfish_block_sign(block, priv_key);
+        static int block_sign(fossil_jellyfish_block_t* block, const uint8_t* priv_key) {
+            return ::fossil_jellyfish_block_sign(block, priv_key);
         }
 
         /**
-         * @brief Verifies the signature of a memory block with a public key.
-         * 
-         * @param block The memory block to verify.
-         * @param pub_key The public key to use for verification.
-         * @return True if the signature is valid, false otherwise.
+         * @brief Verifies a Jellyfish block's signature.
+         * @param block The block to verify.
+         * @param pub_key The public key.
+         * @return True if signature is valid.
          */
-        bool block_verify_signature(const fossil_jellyfish_block_t* block, const uint8_t* pub_key) const {
-            return fossil_jellyfish_block_verify_signature(block, pub_key);
+        static bool block_verify_signature(const fossil_jellyfish_block_t* block, const uint8_t* pub_key) {
+            return ::fossil_jellyfish_block_verify_signature(block, pub_key);
         }
 
         /**
