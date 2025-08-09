@@ -144,9 +144,29 @@ void fossil_lang_extract_focus(const char *input, char *out, size_t out_size);
  */
 float fossil_lang_similarity(const char *a, const char *b);
 
+/**
+ * Processes input through a pipeline of NLP tasks.
+ * Each task can be enabled/disabled via the pipeline configuration.
+ */
 void fossil_lang_process(const fossil_lang_pipeline_t *pipe, const char *input, fossil_lang_result_t *out);
+
+/**
+ * Logs a trace message for NLP processing.
+ * Useful for debugging and performance analysis.
+ */
 void fossil_lang_trace_log(const char *category, const char *input, float score);
+
+/**
+ * Computes cosine similarity between two embedding vectors.
+ * Returns a float between 0.0 (orthogonal) and 1.0 (identical).
+ */
 float fossil_lang_embedding_similarity(const float *vec_a, const float *vec_b, size_t len);
+
+/**
+ * Generates alternative phrasings for a given input.
+ * Useful for expanding search queries or generating variants.
+ * Outputs are written to `outputs`, which must be preallocated.
+ */
 void fossil_lang_generate_variants(const char *input, char outputs[][256], size_t max_outputs);
 
 #ifdef __cplusplus
