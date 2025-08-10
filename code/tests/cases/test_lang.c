@@ -149,6 +149,7 @@ FOSSIL_TEST_CASE(c_test_lang_process_pipeline) {
 // * * * * * * * * * * * * * * * * * * * * * * * *
 FOSSIL_TEST_GROUP(c_lang_tests) {
     FOSSIL_TEST_ADD(c_lang_fixture, c_test_lang_tokenize_basic);
+    FOSSIL_TEST_ADD(c_lang_fixture, c_test_lang_is_question);
     FOSSIL_TEST_ADD(c_lang_fixture, c_test_lang_detect_emotion);
     FOSSIL_TEST_ADD(c_lang_fixture, c_test_lang_detect_bias_or_falsehood);
     FOSSIL_TEST_ADD(c_lang_fixture, c_test_lang_align_truth);
