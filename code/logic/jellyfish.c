@@ -373,76 +373,20 @@ int fossil_jellyfish_deserialize_from_buffer(fossil_jellyfish_chain_t *chain, co
 void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
     if (!chain) return;
 
-    chain->count = 0;
-    memset(chain->device_id, 0, sizeof(chain->device_id));
-    chain->created_at = 0;
-    chain->updated_at = 0;
+    // Zero out the entire chain structure
+    memset(chain, 0, sizeof(*chain));
+
+    // Initialize non-zero or custom default fields for the chain
+    chain->attributes.valid = 1;          // Assume valid until proven otherwise
+    chain->attributes.confidence = 1.0f; // Default to max confidence
 
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
         fossil_jellyfish_block_t *b = &chain->memory[i];
 
-        // ---- IO ----
-        memset(&b->io, 0, sizeof(b->io));
-        b->io.input_len = 0;
-        b->io.output_len = 0;
-        b->io.input[0] = '\0';
-        b->io.output[0] = '\0';
-        b->io.input_token_count = 0;
-        b->io.output_token_count = 0;
-        b->io.compressed = 0;
-        b->io.redacted = 0;
-        b->io.reserved = 0;
-
-        // ---- Identity ----
-        memset(&b->identity, 0, sizeof(b->identity));
-        b->identity.block_index = 0;
-        b->identity.prev_block_index = 0;
-        b->identity.signature_len = 0;
-        b->identity.reserved = 0;
-
-        // ---- Time ----
-        memset(&b->time, 0, sizeof(b->time));
-        b->time.timestamp = 0;
-        b->time.delta_ms = 0;
-        b->time.duration_ms = 0;
-        b->time.updated_at = 0;
-        b->time.expires_at = 0;
-        b->time.validated_at = 0;
-
-        // ---- Attributes ----
-        memset(&b->attributes, 0, sizeof(b->attributes));
-        b->attributes.immutable = 0;
+        // Reset block type and classification fields
+        b->block_type = JELLY_BLOCK_UNKNOWN;
         b->attributes.valid = 1;          // Assume valid until proven otherwise
         b->attributes.confidence = 1.0f;  // Default to max confidence
-        b->attributes.usage_count = 0;
-        b->attributes.pruned = 0;
-        b->attributes.redacted = 0;
-        b->attributes.deduplicated = 0;
-        b->attributes.compressed = 0;
-        b->attributes.expired = 0;
-        b->attributes.trusted = 0;
-        b->attributes.conflicted = 0;
-        b->attributes.reserved = 0;
-
-        // ---- Block type ----
-        b->block_type = JELLY_BLOCK_UNKNOWN;
-
-        // ---- Classification ----
-        memset(&b->classify, 0, sizeof(b->classify));
-        b->classify.derived_from_index = 0;
-        memset(b->classify.cross_refs, 0, sizeof(b->classify.cross_refs));
-        b->classify.cross_ref_count = 0;
-        memset(b->classify.forward_refs, 0, sizeof(b->classify.forward_refs));
-        b->classify.forward_ref_count = 0;
-        b->classify.reasoning_depth = 0;
-        b->classify.reserved = 0;
-        b->classify.classification_reason[0] = '\0';
-        for (size_t t = 0; t < FOSSIL_JELLYFISH_MAX_TAGS; ++t) {
-            b->classify.tags[t][0] = '\0';
-        }
-        b->classify.similarity_score = 0.0f;
-        b->classify.is_hallucinated = 0;
-        b->classify.is_contradicted = 0;
     }
 }
 
