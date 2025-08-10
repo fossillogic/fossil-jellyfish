@@ -373,20 +373,14 @@ int fossil_jellyfish_deserialize_from_buffer(fossil_jellyfish_chain_t *chain, co
 void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
     if (!chain) return;
 
-    // Zero out the entire chain structure
     memset(chain, 0, sizeof(*chain));
-
-    // Initialize non-zero or custom default fields for the chain
-    chain->memory.attributes.valid = 1;          // Assume valid until proven otherwise
-    chain->memory.attributes.confidence = 1.0f; // Default to max confidence
 
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
         fossil_jellyfish_block_t *b = &chain->memory[i];
 
-        // Reset block type and classification fields
         b->block_type = JELLY_BLOCK_UNKNOWN;
-        b->memory.attributes.valid = 1;          // Assume valid until proven otherwise
-        b->memory.attributes.confidence = 1.0f;  // Default to max confidence
+        b->attributes.valid = 1;          // Assume valid until proven otherwise
+        b->attributes.confidence = 1.0f;  // Default to max confidence
     }
 }
 
