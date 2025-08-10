@@ -377,16 +377,16 @@ void fossil_jellyfish_init(fossil_jellyfish_chain_t *chain) {
     memset(chain, 0, sizeof(*chain));
 
     // Initialize non-zero or custom default fields for the chain
-    chain->attributes.valid = 1;          // Assume valid until proven otherwise
-    chain->attributes.confidence = 1.0f; // Default to max confidence
+    chain->memory.attributes.valid = 1;          // Assume valid until proven otherwise
+    chain->memory.attributes.confidence = 1.0f; // Default to max confidence
 
     for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
         fossil_jellyfish_block_t *b = &chain->memory[i];
 
         // Reset block type and classification fields
         b->block_type = JELLY_BLOCK_UNKNOWN;
-        b->attributes.valid = 1;          // Assume valid until proven otherwise
-        b->attributes.confidence = 1.0f;  // Default to max confidence
+        b->memory.attributes.valid = 1;          // Assume valid until proven otherwise
+        b->memory.attributes.confidence = 1.0f;  // Default to max confidence
     }
 }
 
