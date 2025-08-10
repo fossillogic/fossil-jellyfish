@@ -551,54 +551,54 @@ FOSSIL_TEST_CASE(c_test_jellyfish_find_by_hash_returns_null_for_missing) {
     ASSUME_ITS_TRUE(found == NULL);
 }
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_clone_chain_copies_all_blocks) {
-//     fossil_jellyfish_chain_t src, dst;
-//     fossil_jellyfish_init(&src);
-//     fossil_jellyfish_init(&dst);
-//     fossil_jellyfish_learn(&src, "clone", "me");
-//     int result = fossil_jellyfish_clone_chain(&src, &dst);
-//     ASSUME_ITS_EQUAL_I32(result, 0);
-//     ASSUME_ITS_EQUAL_I32(src.count, dst.count);
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_clone_chain_copies_all_blocks) {
+    fossil_jellyfish_chain_t src, dst;
+    fossil_jellyfish_init(&src);
+    fossil_jellyfish_init(&dst);
+    fossil_jellyfish_learn(&src, "clone", "me");
+    int result = fossil_jellyfish_clone_chain(&src, &dst);
+    ASSUME_ITS_EQUAL_I32(result, 0);
+    ASSUME_ITS_EQUAL_I32(src.count, dst.count);
+}
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_reason_verbose_returns_match) {
-//     fossil_jellyfish_chain_t chain;
-//     fossil_jellyfish_init(&chain);
-//     fossil_jellyfish_learn(&chain, "input", "output");
-//     char out[64] = {0};
-//     float conf = 0.0f;
-//     const fossil_jellyfish_block_t *block = NULL;
-//     bool found = fossil_jellyfish_reason_verbose(&chain, "input", out, &conf, &block);
-//     ASSUME_ITS_TRUE(found);
-//     ASSUME_ITS_EQUAL_CSTR(out, "output");
-//     ASSUME_ITS_TRUE(conf > 0.0f);
-//     ASSUME_ITS_TRUE(block != NULL);
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_reason_verbose_returns_match) {
+    fossil_jellyfish_chain_t chain;
+    fossil_jellyfish_init(&chain);
+    fossil_jellyfish_learn(&chain, "input", "output");
+    char out[64] = {0};
+    float conf = 0.0f;
+    const fossil_jellyfish_block_t *block = NULL;
+    bool found = fossil_jellyfish_reason_verbose(&chain, "input", out, &conf, &block);
+    ASSUME_ITS_TRUE(found);
+    ASSUME_ITS_EQUAL_CSTR(out, "output");
+    ASSUME_ITS_TRUE(conf > 0.0f);
+    ASSUME_ITS_TRUE(block != NULL);
+}
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_reason_verbose_returns_false_for_no_match) {
-//     fossil_jellyfish_chain_t chain;
-//     fossil_jellyfish_init(&chain);
-//     char out[64] = {0};
-//     float conf = 0.0f;
-//     const fossil_jellyfish_block_t *block = NULL;
-//     bool found = fossil_jellyfish_reason_verbose(&chain, "nope", out, &conf, &block);
-//     ASSUME_ITS_FALSE(found);
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_reason_verbose_returns_false_for_no_match) {
+    fossil_jellyfish_chain_t chain;
+    fossil_jellyfish_init(&chain);
+    char out[64] = {0};
+    float conf = 0.0f;
+    const fossil_jellyfish_block_t *block = NULL;
+    bool found = fossil_jellyfish_reason_verbose(&chain, "nope", out, &conf, &block);
+    ASSUME_ITS_FALSE(found);
+}
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_block_sign_and_verify) {
-//     fossil_jellyfish_block_t block;
-//     memset(&block, 0, sizeof(block));
-//     strcpy(block.io.input, "signme");
-//     strcpy(block.io.output, "signed");
-//     for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
-//         block.identity.hash[i] = (uint8_t)(i + 1);
-//     uint8_t priv_key[32] = {1};
-//     uint8_t pub_key[32] = {1};
-//     int sign_result = fossil_jellyfish_block_sign(&block, priv_key);
-//     ASSUME_ITS_EQUAL_I32(sign_result, 0);
-//     bool valid = fossil_jellyfish_block_verify_signature(&block, pub_key);
-//     ASSUME_ITS_TRUE(valid || !valid); // Accept both, as implementation may be stub
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_block_sign_and_verify) {
+    fossil_jellyfish_block_t block;
+    memset(&block, 0, sizeof(block));
+    strcpy(block.io.input, "signme");
+    strcpy(block.io.output, "signed");
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
+        block.identity.hash[i] = (uint8_t)(i + 1);
+    uint8_t priv_key[32] = {1};
+    uint8_t pub_key[32] = {1};
+    int sign_result = fossil_jellyfish_block_sign(&block, priv_key);
+    ASSUME_ITS_EQUAL_I32(sign_result, 0);
+    bool valid = fossil_jellyfish_block_verify_signature(&block, pub_key);
+    ASSUME_ITS_TRUE(valid || !valid); // Accept both, as implementation may be stub
+}
 
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
@@ -642,10 +642,10 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_explain_outputs_string);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_finds_block);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_returns_null_for_missing);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_clone_chain_copies_all_blocks);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_match);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_false_for_no_match);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_sign_and_verify);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_clone_chain_copies_all_blocks);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_match);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_false_for_no_match);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_sign_and_verify);
 
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
 } // end of tests
