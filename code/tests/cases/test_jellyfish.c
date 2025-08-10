@@ -575,15 +575,15 @@ FOSSIL_TEST_CASE(c_test_jellyfish_reason_verbose_returns_match) {
     ASSUME_ITS_TRUE(block != NULL);
 }
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_reason_verbose_returns_false_for_no_match) {
-//     fossil_jellyfish_chain_t chain;
-//     fossil_jellyfish_init(&chain);
-//     char out[64] = {0};
-//     float conf = 0.0f;
-//     const fossil_jellyfish_block_t *block = NULL;
-//     bool found = fossil_jellyfish_reason_verbose(&chain, "nope", out, &conf, &block);
-//     ASSUME_ITS_FALSE(found);
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_reason_verbose_returns_false_for_no_match) {
+    fossil_jellyfish_chain_t chain;
+    fossil_jellyfish_init(&chain);
+    char out[64] = {0};
+    float conf = 0.0f;
+    const fossil_jellyfish_block_t *block = NULL;
+    bool found = fossil_jellyfish_reason_verbose(&chain, "nope", out, &conf, &block);
+    ASSUME_ITS_FALSE(found);
+}
 
 // FOSSIL_TEST_CASE(c_test_jellyfish_block_sign_and_verify) {
 //     fossil_jellyfish_block_t block;
@@ -644,7 +644,7 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_returns_null_for_missing);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_clone_chain_copies_all_blocks);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_match);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_false_for_no_match);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_false_for_no_match);
     // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_sign_and_verify);
 
     FOSSIL_TEST_REGISTER(c_jellyfish_fixture);
