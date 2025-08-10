@@ -508,48 +508,48 @@ FOSSIL_TEST_CASE(c_test_jellyfish_chain_compact_moves_blocks) {
     ASSUME_ITS_TRUE(chain.memory[0].attributes.valid);
 }
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_block_age_basic) {
-//     fossil_jellyfish_block_t block;
-//     memset(&block, 0, sizeof(block));
-//     block.time.timestamp = 1000000;
-//     uint64_t now = 1005000;
-//     uint64_t age = fossil_jellyfish_block_age(&block, now);
-//     ASSUME_ITS_EQUAL_I32(age, 5000);
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_block_age_basic) {
+    fossil_jellyfish_block_t block;
+    memset(&block, 0, sizeof(block));
+    block.time.timestamp = 1000000;
+    uint64_t now = 1005000;
+    uint64_t age = fossil_jellyfish_block_age(&block, now);
+    ASSUME_ITS_EQUAL_I32(age, 5000);
+}
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_block_explain_outputs_string) {
-//     fossil_jellyfish_block_t block;
-//     memset(&block, 0, sizeof(block));
-//     strcpy(block.io.input, "explain_in");
-//     strcpy(block.io.output, "explain_out");
-//     block.attributes.confidence = 0.75f;
-//     block.attributes.valid = 1;
-//     char buf[256] = {0};
-//     fossil_jellyfish_block_explain(&block, buf, sizeof(buf));
-//     ASSUME_ITS_TRUE(strstr(buf, "explain_in") != NULL);
-//     ASSUME_ITS_TRUE(strstr(buf, "explain_out") != NULL);
-//     ASSUME_ITS_TRUE(strstr(buf, "0.75") != NULL);
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_block_explain_outputs_string) {
+    fossil_jellyfish_block_t block;
+    memset(&block, 0, sizeof(block));
+    strcpy(block.io.input, "explain_in");
+    strcpy(block.io.output, "explain_out");
+    block.attributes.confidence = 0.75f;
+    block.attributes.valid = 1;
+    char buf[256] = {0};
+    fossil_jellyfish_block_explain(&block, buf, sizeof(buf));
+    ASSUME_ITS_TRUE(strstr(buf, "explain_in") != NULL);
+    ASSUME_ITS_TRUE(strstr(buf, "explain_out") != NULL);
+    ASSUME_ITS_TRUE(strstr(buf, "0.75") != NULL);
+}
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_find_by_hash_finds_block) {
-//     fossil_jellyfish_chain_t chain;
-//     fossil_jellyfish_init(&chain);
-//     fossil_jellyfish_learn(&chain, "findme", "found");
-//     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
-//     fossil_jellyfish_hash("findme", "found", hash);
-//     const fossil_jellyfish_block_t *found = fossil_jellyfish_find_by_hash(&chain, hash);
-//     ASSUME_ITS_TRUE(found != NULL);
-//     ASSUME_ITS_EQUAL_CSTR(found->io.input, "findme");
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_find_by_hash_finds_block) {
+    fossil_jellyfish_chain_t chain;
+    fossil_jellyfish_init(&chain);
+    fossil_jellyfish_learn(&chain, "findme", "found");
+    uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
+    fossil_jellyfish_hash("findme", "found", hash);
+    const fossil_jellyfish_block_t *found = fossil_jellyfish_find_by_hash(&chain, hash);
+    ASSUME_ITS_TRUE(found != NULL);
+    ASSUME_ITS_EQUAL_CSTR(found->io.input, "findme");
+}
 
-// FOSSIL_TEST_CASE(c_test_jellyfish_find_by_hash_returns_null_for_missing) {
-//     fossil_jellyfish_chain_t chain;
-//     fossil_jellyfish_init(&chain);
-//     uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
-//     memset(hash, 0xAA, sizeof(hash));
-//     const fossil_jellyfish_block_t *found = fossil_jellyfish_find_by_hash(&chain, hash);
-//     ASSUME_ITS_TRUE(found == NULL);
-// }
+FOSSIL_TEST_CASE(c_test_jellyfish_find_by_hash_returns_null_for_missing) {
+    fossil_jellyfish_chain_t chain;
+    fossil_jellyfish_init(&chain);
+    uint8_t hash[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
+    memset(hash, 0xAA, sizeof(hash));
+    const fossil_jellyfish_block_t *found = fossil_jellyfish_find_by_hash(&chain, hash);
+    ASSUME_ITS_TRUE(found == NULL);
+}
 
 // FOSSIL_TEST_CASE(c_test_jellyfish_clone_chain_copies_all_blocks) {
 //     fossil_jellyfish_chain_t src, dst;
@@ -638,10 +638,10 @@ FOSSIL_TEST_GROUP(c_jellyfish_tests) {
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_fingerprint_changes_on_update);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_trim_reduces_block_count);
     FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_chain_compact_moves_blocks);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_age_basic);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_explain_outputs_string);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_finds_block);
-    // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_returns_null_for_missing);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_age_basic);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_block_explain_outputs_string);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_finds_block);
+    FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_find_by_hash_returns_null_for_missing);
     // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_clone_chain_copies_all_blocks);
     // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_match);
     // FOSSIL_TEST_ADD(c_jellyfish_fixture, c_test_jellyfish_reason_verbose_returns_false_for_no_match);
