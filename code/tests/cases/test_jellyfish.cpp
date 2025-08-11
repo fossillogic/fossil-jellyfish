@@ -14,6 +14,7 @@
 #include <fossil/pizza/framework.h>
 #include "fossil/ai/framework.h"
 
+
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Utilities
 // * * * * * * * * * * * * * * * * * * * * * * * *
@@ -39,227 +40,236 @@ FOSSIL_TEARDOWN(cpp_jellyfish_fixture) {
 // as samples for library usage.
 // * * * * * * * * * * * * * * * * * * * * * * * *
 
-using fossil::ai::JellyfishAI;
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_init) {
-    JellyfishAI ai;
-    const fossil_jellyfish_chain& chain = ai.get_chain();
-    ASSUME_ITS_EQUAL_SIZE(chain.count, 0);
-    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i) {
-        ASSUME_ITS_TRUE(chain.memory[i].valid == 0);
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_basic_hash) {
+    uint8_t hash[32] = {0};
+    fossil::ai::Jellyfish::hash("abc", "xyz", hash);
+    int nonzero = 0;
+    for (size_t i = 0; i < sizeof(hash); ++i) {
+        if (hash[i] != 0) { nonzero = 1; break; }
     }
+    ASSUME_ITS_TRUE(nonzero);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_learn_and_reason) {
-    JellyfishAI ai;
-    ai.learn("hello", "world");
-    const fossil_jellyfish_chain& chain = ai.get_chain();
-    ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "hello");
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "world");
-    ASSUME_ITS_TRUE(chain.memory[0].valid == 1);
-
-    std::string result = ai.reason("hello");
-    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "world");
-
-    // Test unknown input
-    result = ai.reason("unknown");
-    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "Unknown");
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_init_and_learn_reason) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("cpp_input", "cpp_output");
+    const char* result = jf.reason("cpp_input");
+    ASSUME_ITS_EQUAL_CSTR(result, (const char*)"cpp_output");
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_cleanup) {
-    JellyfishAI ai;
-    ai.learn("a", "b");
-    fossil_jellyfish_chain& chain = ai.get_chain();
-    chain.memory[0].confidence = 0.01f; // force low confidence
-    chain.memory[0].valid = 1;
-    chain.count = 1;
-
-    ai.cleanup();
-    ASSUME_ITS_EQUAL_SIZE(chain.count, 0);
-    ASSUME_ITS_TRUE(chain.memory[0].valid == 0);
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_remove_and_find) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("findme", "block");
+    uint8_t hash[32] = {0};
+    fossil::ai::Jellyfish::hash("findme", "block", hash);
+    fossil_jellyfish_block_t* block = jf.find(hash);
+    ASSUME_ITS_TRUE(block != NULL);
+    size_t idx = block - jf.native_chain()->memory;
+    jf.remove(idx);
+    block = jf.find(hash);
+    ASSUME_ITS_TRUE(block == NULL);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_hash) {
-    uint8_t hash1[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
-    uint8_t hash2[FOSSIL_JELLYFISH_HASH_SIZE] = {0};
-    fossil_jellyfish_hash("foo", "bar", hash1);
-    fossil_jellyfish_hash("foo", "baz", hash2);
-
-    int diff = 0;
-    for (size_t i = 0; i < FOSSIL_JELLYFISH_HASH_SIZE; ++i)
-        if (hash1[i] != hash2[i]) diff = 1;
-    ASSUME_ITS_TRUE(diff);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_and_load) {
-    JellyfishAI ai;
-    ai.learn("input1", "output1");
-    ai.learn("input2", "output2");
-
-    // Set known confidence values to ensure they're saved/loaded properly
-    fossil_jellyfish_chain& chain = ai.get_chain();
-    chain.memory[0].confidence = 0.85f;
-    chain.memory[1].confidence = 0.65f;
-
-    const char *filename = "test_jellyfish_save_load.jellyfish";
-    bool save_result = ai.save(filename);
-    ASSUME_ITS_TRUE(save_result);
-
-    JellyfishAI loaded;
-    bool load_result = loaded.load(filename);
-    ASSUME_ITS_TRUE(load_result);
-
-    const fossil_jellyfish_chain& loaded_chain = loaded.get_chain();
-    ASSUME_ITS_EQUAL_SIZE(loaded_chain.count, 2);
-
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].input, "input1");
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[0].output, "output1");
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].input, "input2");
-    ASSUME_ITS_EQUAL_CSTR(loaded_chain.memory[1].output, "output2");
-
-    // Confirm confidence values persisted (within tolerance)
-    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[0].confidence - 0.85f) < 0.01f);
-    ASSUME_ITS_TRUE(fabsf(loaded_chain.memory[1].confidence - 0.65f) < 0.01f);
-
-    // Clean up
-    remove(filename);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_save_fail) {
-    JellyfishAI ai;
-    bool result = ai.save("/invalid/path/should_fail.jellyfish");
-    ASSUME_ITS_TRUE(result);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_load_fail) {
-    JellyfishAI ai;
-    bool result = ai.load("/invalid/path/should_fail.jellyfish");
-    ASSUME_ITS_TRUE(result);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_fuzzy) {
-    JellyfishAI ai;
-    ai.learn("hello", "world");
-    ai.learn("foo", "bar");
-
-    // Fuzzy match: "helo" should match "hello"
-    std::string result = ai.reason("helo");
-    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "world");
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_reason_chain) {
-    JellyfishAI ai;
-    ai.learn("abc", "123");
-    ai.learn("def", "456");
-
-    std::string result = ai.reason("def");
-    ASSUME_ITS_EQUAL_CSTR(result.c_str(), "456");
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_decay_confidence) {
-    JellyfishAI ai;
-    ai.learn("a", "b");
-    fossil_jellyfish_chain& chain = ai.get_chain();
-
-    // Set up one valid block
-    chain.memory[0].confidence = 1.0f;
-    chain.memory[0].valid = 1;
-    chain.count = 1;
-
-    // Simulate old timestamp to force decay
-    time_t now = time(NULL);
-    time_t past = now - 172800; // 2 days ago (48h)
-    chain.memory[0].timestamp = (uint64_t)past * 1000; // assuming ms
-
-    ai.decay_confidence(0.0f); // decay_rate is unused but required by API
-
-    float conf = chain.memory[0].confidence;
-    int valid = chain.memory[0].valid;
-
-    // Confidence should be decayed significantly (2 half-lives)
-    ASSUME_ITS_TRUE(conf < 0.26f); // 0.5^2 = 0.25
-
-    // Should be invalidated if too low
-    ASSUME_ITS_TRUE(valid == 0 || conf < 0.05f);
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_tokenize) {
-    char tokens[8][FOSSIL_JELLYFISH_TOKEN_SIZE] = {{0}};
-    size_t n = fossil_jellyfish_tokenize("Hello, world! 123", tokens, 8);
-    ASSUME_ITS_EQUAL_SIZE(n, 3);
-    ASSUME_ITS_EQUAL_CSTR(tokens[0], "hello");
-    ASSUME_ITS_EQUAL_CSTR(tokens[1], "world");
-    ASSUME_ITS_EQUAL_CSTR(tokens[2], "123");
-}
-
-FOSSIL_TEST_CASE(cpp_test_jellyfish_best_memory) {
-    JellyfishAI ai;
-    ai.learn("a", "b");
-    ai.learn("c", "d");
-    fossil_jellyfish_chain& chain = ai.get_chain();
-    chain.memory[0].confidence = 0.5f;
-    chain.memory[1].confidence = 0.9f;
-    chain.memory[0].valid = 1;
-    chain.memory[1].valid = 1;
-    chain.count = 2;
-
-    const fossil_jellyfish_block *best = ai.best_memory();
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_update_and_best_memory) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("a", "b");
+    jf.learn("c", "d");
+    jf.update(0, "a", "bb");
+    const fossil_jellyfish_block_t* best = jf.best_memory();
     ASSUME_ITS_TRUE(best != NULL);
-    ASSUME_ITS_EQUAL_CSTR(best->input, "c");
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_detect_conflict) {
-    JellyfishAI ai;
-    ai.learn("foo", "bar");
-    int conflict = ai.detect_conflict("foo", "baz");
-    ASSUME_ITS_TRUE(conflict == 0); // Not implemented, always returns 0
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_save_and_load) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("save", "load");
+    const char* file = "cpp_jellyfish_save.bin";
+    int save_result = jf.save(file);
+    ASSUME_ITS_EQUAL_I32(save_result, 0);
+
+    fossil::ai::Jellyfish jf2;
+    jf2.init();
+    int load_result = jf2.load(file);
+    ASSUME_ITS_EQUAL_I32(load_result, 0);
+    const char* result = jf2.reason("save");
+    ASSUME_ITS_EQUAL_CSTR(result, (const char*)"load");
+    remove(file);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_knowledge_coverage) {
-    JellyfishAI ai;
-    ai.learn("a", "b");
-    fossil_jellyfish_chain& chain = ai.get_chain();
-    chain.memory[0].valid = 1;
-    chain.count = 1;
-    float coverage = ai.knowledge_coverage();
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_cleanup_and_audit) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("dup", "val");
+    jf.learn("dup", "val");
+    int issues = jf.audit();
+    ASSUME_ITS_TRUE(issues > 0);
+    jf.cleanup();
+    // After cleanup, at least one valid block should remain
+    size_t valid = 0;
+    for (size_t i = 0; i < FOSSIL_JELLYFISH_MAX_MEM; ++i)
+        if (jf.native_chain()->memory[i].attributes.valid) valid++;
+    ASSUME_ITS_TRUE(valid > 0);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_prune_and_coverage) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("x", "y");
+    jf.native_chain()->memory[0].attributes.confidence = 0.01f;
+    int pruned = jf.prune(0.5f);
+    ASSUME_ITS_TRUE(pruned > 0);
+    float coverage = jf.knowledge_coverage();
     ASSUME_ITS_TRUE(coverage >= 0.0f && coverage <= 1.0f);
 }
 
-FOSSIL_TEST_CASE(cpp_test_jellyfish_chain_struct_fields) {
-    JellyfishAI ai;
-    fossil_jellyfish_chain& chain = ai.get_chain();
-    strcpy(chain.memory[0].input, "foo");
-    strcpy(chain.memory[0].output, "bar");
-    chain.count = 1;
-
-    ASSUME_ITS_EQUAL_SIZE(chain.count, 1);
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].input, "foo");
-    ASSUME_ITS_EQUAL_CSTR(chain.memory[0].output, "bar");
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_conflict_and_reflect) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("input", "out1");
+    int conflict = jf.detect_conflict("input", "out2");
+    ASSUME_ITS_TRUE(conflict != 0);
+    jf.reflect(); // Should not crash
 }
 
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_verify_block_and_chain) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("a", "b");
+    const fossil_jellyfish_block_t* block = jf.best_memory();
+    bool valid = fossil::ai::Jellyfish::verify_block(block);
+    ASSUME_ITS_TRUE(valid);
+    bool chain_ok = jf.verify_chain();
+    ASSUME_ITS_TRUE(chain_ok);
+}
 
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_trust_score_and_mark_immutable) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("core", "logic");
+    fossil::ai::Jellyfish::mark_immutable(&jf.native_chain()->memory[0]);
+    float score = jf.chain_trust_score();
+    ASSUME_ITS_TRUE(score >= 0.0f && score <= 1.0f);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_deduplicate_and_compress) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("dup", "val");
+    jf.learn("dup", "val");
+    int removed = jf.deduplicate_chain();
+    ASSUME_ITS_TRUE(removed > 0);
+    int compressed = jf.compress_chain();
+    ASSUME_ITS_TRUE(compressed >= 0);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_best_match_and_redact_block) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("input", "output");
+    const fossil_jellyfish_block_t* best = jf.best_match("input");
+    ASSUME_ITS_TRUE(best != NULL);
+    fossil_jellyfish_block_t block;
+    memset(&block, 0, sizeof(block));
+    strcpy(block.io.input, "secret");
+    strcpy(block.io.output, "data");
+    int res = fossil::ai::Jellyfish::redact_block(&block);
+    ASSUME_ITS_EQUAL_I32(res, 0);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_chain_stats_and_compare) {
+    fossil::ai::Jellyfish jf1, jf2;
+    jf1.init(); jf2.init();
+    jf1.learn("a", "1");
+    jf2.learn("a", "2");
+    size_t valid[5] = {0};
+    float avg_conf[5] = {0};
+    float immut[5] = {0};
+    jf1.chain_stats(valid, avg_conf, immut);
+    int diff = jf1.compare_chains(jf2);
+    ASSUME_ITS_TRUE(diff > 0);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_chain_fingerprint_and_trim) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("foo", "bar");
+    uint8_t hash1[32] = {0}, hash2[32] = {0};
+    jf.chain_fingerprint(hash1);
+    jf.learn("baz", "qux");
+    jf.chain_fingerprint(hash2);
+    int diff = memcmp(hash1, hash2, 32);
+    ASSUME_ITS_TRUE(diff != 0);
+    int removed = jf.trim(1);
+    ASSUME_ITS_TRUE(removed > 0);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_chain_compact_and_block_age) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("a", "1");
+    jf.learn("b", "2");
+    jf.native_chain()->memory[0].attributes.valid = 0;
+    int moved = jf.chain_compact();
+    ASSUME_ITS_TRUE(moved > 0);
+    fossil_jellyfish_block_t block;
+    memset(&block, 0, sizeof(block));
+    block.time.timestamp = 1000;
+    uint64_t age = fossil::ai::Jellyfish::block_age(&block, 2000);
+    ASSUME_ITS_EQUAL_I32(age, 1000);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_block_explain_and_find_by_hash) {
+    fossil::ai::Jellyfish jf;
+    jf.init();
+    jf.learn("findme", "found");
+    uint8_t hash[32] = {0};
+    fossil::ai::Jellyfish::hash("findme", "found", hash);
+    const fossil_jellyfish_block_t* found = jf.find_by_hash(hash);
+    ASSUME_ITS_TRUE(found != NULL);
+    char buf[128] = {0};
+    fossil::ai::Jellyfish::block_explain(found, buf, sizeof(buf));
+    ASSUME_ITS_TRUE(strstr(buf, "findme") != NULL);
+}
+
+FOSSIL_TEST_CASE(cpp_test_jellyfish_cpp_wrapper_clone_chain_and_reason_verbose) {
+    fossil::ai::Jellyfish src, dst;
+    src.init(); dst.init();
+    src.learn("clone", "me");
+    int result = src.clone_chain(dst);
+    ASSUME_ITS_EQUAL_I32(result, 0);
+    char out[64] = {0};
+    float conf = 0.0f;
+    const fossil_jellyfish_block_t* block = NULL;
+    bool found = dst.reason_verbose("clone", out, &conf, &block);
+    ASSUME_ITS_TRUE(found);
+    ASSUME_ITS_EQUAL_CSTR(out, (const char*)"me");
+}
 
 // * * * * * * * * * * * * * * * * * * * * * * * *
 // * Fossil Logic Test Pool
 // * * * * * * * * * * * * * * * * * * * * * * * *
 FOSSIL_TEST_GROUP(cpp_jellyfish_tests) {    
-    // Generic ToFu Fixture
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_init);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_learn_and_reason);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_cleanup);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_save_and_load);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_hash);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_save_fail);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_load_fail);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_reason_fuzzy);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_reason_chain);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_decay_confidence);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_tokenize);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_best_memory);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_detect_conflict);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_knowledge_coverage);
-    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_chain_struct_fields);
-    
+    // C++ Wrapper Tests
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_basic_hash);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_init_and_learn_reason);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_remove_and_find);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_update_and_best_memory);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_save_and_load);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_cleanup_and_audit);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_prune_and_coverage);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_conflict_and_reflect);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_verify_block_and_chain);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_trust_score_and_mark_immutable);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_deduplicate_and_compress);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_best_match_and_redact_block);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_chain_stats_and_compare);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_chain_fingerprint_and_trim);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_chain_compact_and_block_age);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_block_explain_and_find_by_hash);
+    FOSSIL_TEST_ADD(cpp_jellyfish_fixture, cpp_test_jellyfish_cpp_wrapper_clone_chain_and_reason_verbose);
+
     FOSSIL_TEST_REGISTER(cpp_jellyfish_fixture);
 } // end of tests

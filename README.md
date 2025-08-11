@@ -48,7 +48,7 @@ To get started with Jellyfish, ensure you have the following installed:
    # ======================
    [wrap-git]
    url = https://github.com/fossillogic/fossil-jellyfish.git
-   revision = v0.1.2
+   revision = v0.1.3
 
    [provide]
    fossil-jellyfish = fossil_fish_dep

@@ -13,6 +13,42 @@
  */
 #include "fossil/ai/language.h"
 
+
+void fossil_lang_process(const fossil_lang_pipeline_t *pipe, const char *input, fossil_lang_result_t *out) {
+    char working[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE] = {0};
+    const char *src = input;
+
+    if (pipe->normalize) {
+        fossil_lang_normalize(input, working, sizeof(working));
+        src = working;
+        strncpy(out->normalized, working, sizeof(out->normalized) - 1);
+    }
+
+    if (pipe->tokenize) {
+        out->token_count = fossil_lang_tokenize(src, out->tokens, 64);
+    }
+
+    if (pipe->detect_emotion) {
+        out->emotion_score = fossil_lang_detect_emotion(src);
+    }
+
+    if (pipe->detect_bias) {
+        out->bias_detected = fossil_lang_detect_bias_or_falsehood(src);
+    }
+
+    if (pipe->is_question) {
+        out->is_question = fossil_lang_is_question(src);
+    }
+
+    if (pipe->extract_focus) {
+        fossil_lang_extract_focus(src, out->focus, sizeof(out->focus));
+    }
+
+    if (pipe->summarize) {
+        fossil_lang_summarize(src, out->summary, sizeof(out->summary));
+    }
+}
+
 size_t fossil_lang_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TOKEN_SIZE], size_t max_tokens) {
     size_t count = 0, len = strlen(input);
     char word[FOSSIL_JELLYFISH_TOKEN_SIZE] = {0};
@@ -20,9 +56,9 @@ size_t fossil_lang_tokenize(const char *input, char tokens[][FOSSIL_JELLYFISH_TO
 
     for (size_t i = 0; i <= len; ++i) {
         char c = input[i];
-        if (isalnum(c)) {
+        if (isalnum((unsigned char)c)) {
             if (wi < FOSSIL_JELLYFISH_TOKEN_SIZE - 1)
-                word[wi++] = tolower(c);
+                word[wi++] = tolower((unsigned char)c);
         } else {
             if (wi > 0 && count < max_tokens) {
                 word[wi] = '\0';
@@ -40,7 +76,11 @@ bool fossil_lang_is_question(const char *input) {
 
     if (input[len - 1] == '?') return true;
 
-    const char *wh[] = {"what", "why", "how", "who", "when", "where", "is", "are", "do", "does", "can"};
+    const char *wh[] = {
+        "what", "why", "how", "who", "when", "where", "is", "are", "do", "does", "can",
+        "could", "would", "should", "will", "did", "may", "might", "shall", "whose", "whom",
+        "which", "was", "were", "has", "have", "had", "am"
+    };
     char first[16] = {0};
 
     sscanf(input, "%15s", first);
@@ -54,8 +94,20 @@ bool fossil_lang_is_question(const char *input) {
 }
 
 float fossil_lang_detect_emotion(const char *input) {
-    const char *positive[] = {"great", "love", "happy", "good", "excellent", "amazing", "yes"};
-    const char *negative[] = {"hate", "bad", "sad", "angry", "terrible", "no", "awful"};
+    const char *positive[] = {
+        "great", "love", "happy", "good", "excellent", "amazing", "yes", "awesome", "fantastic", "wonderful",
+        "positive", "joy", "joyful", "delight", "delighted", "pleased", "satisfied", "brilliant", "superb",
+        "outstanding", "cheerful", "smile", "smiling", "success", "successful", "win", "winning", "enjoy",
+        "enjoyed", "enjoying", "like", "liked", "likes", "best", "cool", "nice", "grateful", "thankful",
+        "optimistic", "hopeful", "enthusiastic", "encouraged", "motivated", "inspired", "peaceful", "calm"
+    };
+    const char *negative[] = {
+        "hate", "bad", "sad", "angry", "terrible", "no", "awful", "horrible", "worst", "negative", "pain",
+        "painful", "disappointed", "disappointing", "failure", "fail", "loser", "lose", "losing", "cry",
+        "crying", "depressed", "upset", "mad", "furious", "annoyed", "frustrated", "dislike", "disliked",
+        "disgust", "disgusted", "unhappy", "miserable", "hopeless", "pessimistic", "resentful", "bitter",
+        "jealous", "regret", "ashamed", "guilty", "afraid", "scared", "fear", "anxious", "nervous"
+    };
 
     float score = 0.0f;
     char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
@@ -76,7 +128,14 @@ float fossil_lang_detect_emotion(const char *input) {
 int fossil_lang_detect_bias_or_falsehood(const char *input) {
     const char *bias_phrases[] = {
         "everyone knows", "obviously", "literally", "always", "never", "the truth is",
-        "you have to believe", "no one can deny", "it's a fact", "fake news"
+        "you have to believe", "no one can deny", "it's a fact", "fake news",
+        "clearly", "undeniably", "without a doubt", "as we all know", "it is certain",
+        "all the experts agree", "it goes without saying", "as everyone agrees",
+        "the only explanation", "there is no alternative", "must be true",
+        "cannot be false", "beyond question", "no one disagrees", "it is proven",
+        "everybody says", "it is obvious", "as is well known", "it is well established",
+        "the fact remains", "the reality is", "it is clear", "it is evident",
+        "the simple truth", "the undeniable fact", "the only possible", "it is universally accepted"
     };
 
     for (size_t i = 0; i < sizeof(bias_phrases) / sizeof(bias_phrases[0]); ++i) {
@@ -86,15 +145,15 @@ int fossil_lang_detect_bias_or_falsehood(const char *input) {
     return 0;
 }
 
-int fossil_lang_align_truth(const fossil_jellyfish_chain *chain, const char *input) {
+int fossil_lang_align_truth(const fossil_jellyfish_chain_t *chain, const char *input) {
     if (!chain || !input) return 0;
 
     for (size_t i = 0; i < chain->count; ++i) {
-        const fossil_jellyfish_block *b = &chain->memory[i];
-        if (!b->valid) continue;
+        const fossil_jellyfish_block_t *b = &chain->memory[i];
+        if (!b->attributes.valid) continue;
 
-        if (strcmp(input, b->input) == 0) {
-            if (strcmp(b->output, "false") == 0 || strcmp(b->output, "incorrect") == 0)
+        if (strcmp(input, b->io.input) == 0) {
+            if (strcmp(b->io.output, "false") == 0 || strcmp(b->io.output, "incorrect") == 0)
                 return -1;
             return 1;
         }
@@ -103,7 +162,7 @@ int fossil_lang_align_truth(const fossil_jellyfish_chain *chain, const char *inp
     return 0;
 }
 
-float fossil_lang_estimate_trust(const fossil_jellyfish_chain *chain, const char *input) {
+float fossil_lang_estimate_trust(const fossil_jellyfish_chain_t *chain, const char *input) {
     if (!input || strlen(input) < 3) return 0.1f;
 
     int contradiction = fossil_lang_align_truth(chain, input);
@@ -140,7 +199,45 @@ void fossil_lang_normalize(const char *input, char *out, size_t out_size) {
         {"ur", "your"},
         {"im", "I am"},
         {"idk", "I don't know"},
-        {"lol", "(laughing)"}
+        {"lol", "(laughing)"},
+        {"btw", "by the way"},
+        {"brb", "be right back"},
+        {"omg", "oh my god"},
+        {"thx", "thanks"},
+        {"pls", "please"},
+        {"plz", "please"},
+        {"b4", "before"},
+        {"gr8", "great"},
+        {"lmk", "let me know"},
+        {"np", "no problem"},
+        {"tbh", "to be honest"},
+        {"afaik", "as far as I know"},
+        {"asap", "as soon as possible"},
+        {"fyi", "for your information"},
+        {"smh", "shaking my head"},
+        {"tldr", "too long; didn't read"},
+        {"bff", "best friend forever"},
+        {"jk", "just kidding"},
+        {"nvm", "never mind"},
+        {"rofl", "rolling on the floor laughing"},
+        {"ttyl", "talk to you later"},
+        {"wyd", "what are you doing"},
+        {"wbu", "what about you"},
+        {"irl", "in real life"},
+        {"dm", "direct message"},
+        {"imo", "in my opinion"},
+        {"imho", "in my humble opinion"},
+        {"ftw", "for the win"},
+        {"gg", "good game"},
+        {"afk", "away from keyboard"},
+        {"bc", "because"},
+        {"tho", "though"},
+        {"sup", "what's up"},
+        {"ya", "you"},
+        {"tho", "though"},
+        {"msg", "message"},
+        {"pic", "picture"},
+        {"pics", "pictures"}
     };
 
     const char *p = input;
@@ -199,10 +296,16 @@ void fossil_lang_summarize(const char *input, char *out, size_t out_size) {
 void fossil_lang_extract_focus(const char *input, char *out, size_t out_size) {
     const char *stopwords[] = {
         "i", "you", "we", "they", "he", "she", "it",
-        "am", "is", "are", "was", "were", "be", "been",
-        "do", "does", "did", "will", "can", "should", "would", "could",
-        "to", "a", "an", "the", "and", "or", "in", "on", "for", "with",
-        "this", "that", "these", "those", "of", "at", "as", "from", "by"
+        "me", "my", "mine", "your", "yours", "our", "ours", "their", "theirs", "his", "her", "hers", "its",
+        "am", "is", "are", "was", "were", "be", "been", "being",
+        "do", "does", "did", "doing", "will", "can", "should", "would", "could", "may", "might", "must", "shall",
+        "have", "has", "had", "having",
+        "to", "a", "an", "the", "and", "or", "but", "if", "then", "else", "in", "on", "for", "with", "about", "against",
+        "this", "that", "these", "those", "of", "at", "as", "from", "by", "so", "such", "than", "too", "very", "just",
+        "not", "no", "nor", "yet", "also", "because", "while", "where", "when", "which", "who", "whom", "whose", "what",
+        "how", "why", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "only", "own", "same",
+        "over", "under", "again", "further", "once", "here", "there", "out", "up", "down", "off", "above", "below", "into",
+        "between", "through", "during", "before", "after", "around", "among"
     };
 
     char tokens[FOSSIL_JELLYFISH_MAX_TOKENS][FOSSIL_JELLYFISH_TOKEN_SIZE];
@@ -250,4 +353,99 @@ float fossil_lang_similarity(const char *a, const char *b) {
     if (total == 0) return 0.0f;
 
     return (2.0f * match) / total; // Jaccard-based estimate
+}
+
+void fossil_lang_trace_log(const char *category, const char *input, float score) {
+    fprintf(stderr, "[NLP-TRACE] [%s] Score=%.3f | Input=\"%s\"\n", category, score, input);
+}
+
+float fossil_lang_embedding_similarity(const float *vec_a, const float *vec_b, size_t len) {
+    float dot = 0.0f, norm_a = 0.0f, norm_b = 0.0f;
+
+    for (size_t i = 0; i < len; ++i) {
+        dot += vec_a[i] * vec_b[i];
+        norm_a += vec_a[i] * vec_a[i];
+        norm_b += vec_b[i] * vec_b[i];
+    }
+
+    if (norm_a == 0.0f || norm_b == 0.0f) return 0.0f;
+    return dot / (sqrtf(norm_a) * sqrtf(norm_b));
+}
+
+typedef struct {
+    const char *word;
+    const char *alt;
+} synonym_pair;
+
+static const synonym_pair replacements[] = {
+    {"great", "excellent"},
+    {"happy", "joyful"},
+    {"sad", "unhappy"},
+    {"angry", "mad"},
+    {"love", "adore"},
+    {"hate", "dislike"},
+    {"good", "nice"},
+    {"bad", "poor"},
+    {"fast", "quick"},
+    {"slow", "sluggish"},
+    {"smart", "intelligent"},
+    {"dumb", "unintelligent"},
+    {"easy", "simple"},
+    {"hard", "difficult"},
+    {"big", "large"},
+    {"small", "tiny"},
+    {"old", "ancient"},
+    {"young", "youthful"},
+    {"strong", "powerful"},
+    {"weak", "frail"},
+    {"rich", "wealthy"},
+    {"poor", "destitute"},
+    {"clean", "spotless"},
+    {"dirty", "filthy"},
+    {"funny", "humorous"},
+    {"serious", "grave"},
+    {"quick", "rapid"},
+    {"slow", "lethargic"},
+    {"beautiful", "gorgeous"},
+    {"ugly", "unattractive"},
+    {"friendly", "amiable"},
+    {"mean", "cruel"},
+    {"hot", "warm"},
+    {"cold", "chilly"},
+    {"bright", "luminous"},
+    {"dark", "dim"},
+    {"easy", "effortless"},
+    {"difficult", "challenging"},
+    {"important", "crucial"},
+    {"unimportant", "trivial"},
+    {"safe", "secure"},
+    {"dangerous", "hazardous"}
+};
+
+void fossil_lang_generate_variants(const char *input, char outputs[][256], size_t max_outputs) {
+    size_t count = 0;
+
+    for (size_t i = 0; i < sizeof(replacements) / sizeof(replacements[0]); ++i) {
+        if (strstr(input, replacements[i].word) != NULL && count < max_outputs) {
+            char buf[256];
+            strncpy(buf, input, sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+
+            char *pos = strstr(buf, replacements[i].word);
+            if (pos) {
+                size_t prefix = pos - buf;
+                snprintf(outputs[count], 256, "%.*s%s%s",
+                         (int)prefix,
+                         buf,
+                         replacements[i].alt,
+                         pos + strlen(replacements[i].word));
+                ++count;
+            }
+        }
+    }
+
+    if (count == 0 && max_outputs > 0) {
+        strncpy(outputs[0], input, 255);
+        outputs[0][255] = '\0';
+    }
 }

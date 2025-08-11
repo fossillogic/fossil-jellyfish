@@ -16,10 +16,41 @@
 
 #include "jellyfish.h"
 
+#define FOSSIL_LANG_PIPELINE_OUTPUT_SIZE 1024
+
+#ifndef FOSSIL_JELLYFISH_TOKEN_SIZE
+#define FOSSIL_JELLYFISH_TOKEN_SIZE 32
+#endif
+
+#ifndef FOSSIL_JELLYFISH_MAX_TOKENS
+#define FOSSIL_JELLYFISH_MAX_TOKENS 64
+#endif
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+typedef struct {
+    bool normalize;
+    bool tokenize;
+    bool detect_emotion;
+    bool detect_bias;
+    bool extract_focus;
+    bool is_question;
+    bool summarize;
+} fossil_lang_pipeline_t;
+
+typedef struct {
+    float emotion_score;
+    bool bias_detected;
+    bool is_question;
+    char focus[64];
+    char summary[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE];
+    char normalized[FOSSIL_LANG_PIPELINE_OUTPUT_SIZE];
+    char tokens[64][FOSSIL_JELLYFISH_TOKEN_SIZE];
+    size_t token_count;
+} fossil_lang_result_t;
 
 // *****************************************************************************
 // Function prototypes
@@ -56,7 +87,7 @@ int fossil_lang_detect_bias_or_falsehood(const char *input);
  *   0  → unknown
  *  -1  → contradiction detected
  */
-int fossil_lang_align_truth(const fossil_jellyfish_chain *chain, const char *input);
+int fossil_lang_align_truth(const fossil_jellyfish_chain_t *chain, const char *input);
 
 /**
  * Computes semantic similarity between two input strings.
@@ -87,7 +118,7 @@ void fossil_lang_extract_focus(const char *input, char *out, size_t out_size);
  * structure, word choice, exaggeration, and alignment.
  * Score is in [0.0, 1.0].
  */
-float fossil_lang_estimate_trust(const fossil_jellyfish_chain *chain, const char *input);
+float fossil_lang_estimate_trust(const fossil_jellyfish_chain_t *chain, const char *input);
 
 /**
  * Replace slang and contractions with formal equivalents.
@@ -112,6 +143,31 @@ void fossil_lang_extract_focus(const char *input, char *out, size_t out_size);
  * Returns a float between 0.0 (no overlap) and 1.0 (identical sets).
  */
 float fossil_lang_similarity(const char *a, const char *b);
+
+/**
+ * Processes input through a pipeline of NLP tasks.
+ * Each task can be enabled/disabled via the pipeline configuration.
+ */
+void fossil_lang_process(const fossil_lang_pipeline_t *pipe, const char *input, fossil_lang_result_t *out);
+
+/**
+ * Logs a trace message for NLP processing.
+ * Useful for debugging and performance analysis.
+ */
+void fossil_lang_trace_log(const char *category, const char *input, float score);
+
+/**
+ * Computes cosine similarity between two embedding vectors.
+ * Returns a float between 0.0 (orthogonal) and 1.0 (identical).
+ */
+float fossil_lang_embedding_similarity(const float *vec_a, const float *vec_b, size_t len);
+
+/**
+ * Generates alternative phrasings for a given input.
+ * Useful for expanding search queries or generating variants.
+ * Outputs are written to `outputs`, which must be preallocated.
+ */
+void fossil_lang_generate_variants(const char *input, char outputs[][256], size_t max_outputs);
 
 #ifdef __cplusplus
 }
