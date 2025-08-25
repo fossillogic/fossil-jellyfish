@@ -506,7 +506,7 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, 
 
             memset(&block->classify, 0, sizeof(block->classify));
             block->classify.derived_from_index = derived_from_index;
-            strncpy(block->classify.classification_reason, classification_reason, sizeof(block->classify.classification_reason) - 1);
+            snprintf(block->classify.classification_reason, sizeof(block->classify.classification_reason), "%s", classification_reason);
             block->classify.similarity_score = 1.0f;
             block->classify.is_hallucinated = is_hallucinated;
             block->classify.is_contradicted = 0;
@@ -584,7 +584,7 @@ void fossil_jellyfish_learn(fossil_jellyfish_chain_t *chain, const char *input, 
 
             memset(&block->classify, 0, sizeof(block->classify));
             block->classify.derived_from_index = derived_from_index;
-            strncpy(block->classify.classification_reason, classification_reason, sizeof(block->classify.classification_reason) - 1);
+            snprintf(block->classify.classification_reason, sizeof(block->classify.classification_reason), "%s", classification_reason);
             block->classify.similarity_score = 1.0f;
             block->classify.is_hallucinated = is_hallucinated;
             block->classify.is_contradicted = 0;
