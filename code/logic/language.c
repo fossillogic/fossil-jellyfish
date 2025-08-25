@@ -21,7 +21,9 @@ void fossil_lang_process(const fossil_lang_pipeline_t *pipe, const char *input, 
     if (pipe->normalize) {
         fossil_lang_normalize(input, working, sizeof(working));
         src = working;
-        strncpy(out->normalized, working, sizeof(out->normalized) - 1);
+    
+        // Safe copy with guaranteed null-termination
+        snprintf(out->normalized, sizeof(out->normalized), "%s", working);
     }
 
     if (pipe->tokenize) {
