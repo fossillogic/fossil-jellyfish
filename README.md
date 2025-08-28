@@ -28,37 +28,34 @@ To get started with Jellyfish, ensure you have the following installed:
 
 - **Meson Build System**: If you don’t have Meson installed, follow the installation instructions on the official [Meson website](https://mesonbuild.com/Getting-meson.html).
 
-### Adding Jellyfish Dependency
+### Adding Dependency
 
-#### Adding Jellyfish Dependency With Meson
+#### Adding via Meson Git Wrap
 
-1. **Install Meson Build System**:
-   Install Meson version `1.3` or newer:
-   ```sh
-   python -m pip install meson           # To install Meson
-   python -m pip install --upgrade meson # To upgrade Meson
-   ```
+To add a git-wrap, place a `.wrap` file in `subprojects` with the Git repo URL and revision, then use `dependency('fossil-jellyfish')` in `meson.build` so Meson can fetch and build it automatically.
 
-2. **Create a `.wrap` File**:
-   Add the `fossil-jellyfish.wrap` file in your `subprojects` directory and include the following content:
+#### Adding via Conan GitHub repository
 
-   ```ini
-   # ======================
-   # Git Wrap package definition
-   # ======================
-   [wrap-git]
-   url = https://github.com/fossillogic/fossil-jellyfish.git
-   revision = v0.1.3
+ packages directly from a GitHub repository if it contains a valid `conanfile.py`.
 
-   [provide]
-   fossil-jellyfish = fossil_fish_dep
-   ```
+```bash
+conan install git+https://github.com/fossillogic/fossil-jellyfish.git#v0.1.4 --name fossil_jellyfish --build=missing
+```
 
-3. **Integrate the Dependency**:
-   In your `meson.build` file, integrate Jellyfish by adding the following line:
-   ```ini
-   dep = dependency('fossil-jellyfish')
-   ```
+#### Integrate the Dependency:
+
+Add the `fossil-jellyfish.wrap` file in your `subprojects` directory and include the following content:
+
+```ini
+[wrap-git]
+url = https://github.com/fossillogic/fossil-jellyfish.git
+revision = v0.1.4
+
+[provide]
+dependency_names = fossil-jellyfish
+```
+
+**Note**: For the best experience, always use the latest releases. Visit the [releases](https://github.com/fossillogic/fossil-jellyfish/releases) page for the latest versions.
 
 ## Configure Options
 
