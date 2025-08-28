@@ -22,11 +22,12 @@ Jellyfish is the core engine of Truthful Intelligence, a lightweight AI library 
 - **Modular and Configurable**  
   Built to be embedded, extended, or customized for Truthful Intelligence applications across any platform.
 
-## Prerequisites
+## ***Prerequisites***
 
-To get started with Jellyfish, ensure you have the following installed:
+To get started, ensure you have the following installed:
 
-- **Meson Build System**: If you don’t have Meson installed, follow the installation instructions on the official [Meson website](https://mesonbuild.com/Getting-meson.html).
+- **Meson Build System**: If you don’t have Meson `1.8.0` or newer installed, follow the installation instructions on the official [Meson website](https://mesonbuild.com/Getting-meson.html).
+- **Conan Package Manager**: If you prefer using Conan, ensure it is installed by following the instructions on the official [Conan website](https://docs.conan.io/en/latest/installation.html).
 
 ### Adding Dependency
 
