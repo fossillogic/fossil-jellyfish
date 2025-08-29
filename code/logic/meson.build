@@ -17,3 +17,5 @@ fossil_fish_lib = library('fossil_jellyfish',
 fossil_fish_dep = declare_dependency(
     link_with: [fossil_fish_lib],
     include_directories: dir)
+
+meson.override_dependency('fossil-jellyfish', fossil_jellyfish_dep)
