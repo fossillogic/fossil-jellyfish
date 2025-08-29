@@ -8,7 +8,7 @@ else
     winsock_dep = []
 endif
 
-fossil_fish_lib = static_library('fossil-jellyfish',
+fossil_fish_lib = library('fossil_jellyfish',
     files('jellyfish.c', 'iochat.c', 'language.c'),
     install: true,
     dependencies: [cc.find_library('m', required: false), winsock_dep],
